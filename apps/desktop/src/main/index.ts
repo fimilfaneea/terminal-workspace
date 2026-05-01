@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { createMainWindow } from './window';
 import { installLogger, log } from './logger';
+import { TerminalManager } from './terminal/TerminalManager';
 
 const gotLock = app.requestSingleInstanceLock();
 
@@ -11,6 +12,8 @@ if (!gotLock) {
   Menu.setApplicationMenu(null);
 
   let mainWindow: BrowserWindow | null = null;
+  let terminalManager: TerminalManager | null = null;
+  let isQuitting = false;
 
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -20,6 +23,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    terminalManager = new TerminalManager();
     mainWindow = createMainWindow();
     mainWindow.on('closed', () => {
       mainWindow = null;
@@ -31,6 +35,9 @@ if (!gotLock) {
     }
     if (process.env['DEBUG_TERMINAL_HISTORY'] === '1') {
       void import('./terminal/debugHarness').then((m) => m.runHistoryCapHarness());
+    }
+    if (process.env['DEBUG_TERMINAL_PHASE4'] === '1') {
+      void import('./terminal/debugHarness').then((m) => m.runPhase4Harness());
     }
 
     app.on('activate', () => {
@@ -49,7 +56,18 @@ if (!gotLock) {
     }
   });
 
-  app.on('before-quit', () => {
-    // Reserved for Phase 4/10 cleanup (terminal sessions, etc.).
+  app.on('before-quit', (event) => {
+    if (isQuitting || !terminalManager) return;
+    isQuitting = true;
+    event.preventDefault();
+    void (async () => {
+      try {
+        await terminalManager!.closeAll();
+      } catch (err) {
+        log.warn('before-quit: closeAll failed', err);
+      } finally {
+        app.quit();
+      }
+    })();
   });
 }
