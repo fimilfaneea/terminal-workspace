@@ -26,6 +26,13 @@ if (!gotLock) {
     });
     log.info('app:ready');
 
+    if (process.env['DEBUG_TERMINAL'] === '1') {
+      void import('./terminal/debugHarness').then((m) => m.runDebugHarness());
+    }
+    if (process.env['DEBUG_TERMINAL_HISTORY'] === '1') {
+      void import('./terminal/debugHarness').then((m) => m.runHistoryCapHarness());
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createMainWindow();
