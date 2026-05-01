@@ -37,3 +37,47 @@ export type TerminalEvent =
   | { kind: 'closed'; sessionId: string }
   | { kind: 'renamed'; sessionId: string; title: string }
   | { kind: 'cleared'; sessionId: string };
+
+export type IpcResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; message: string; code?: string };
+
+export interface WritePayload {
+  sessionId: string;
+  data: string;
+}
+
+export interface ResizePayload {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface CloseSessionPayload {
+  sessionId: string;
+}
+
+export interface RestartSessionPayload {
+  sessionId: string;
+}
+
+export interface RenamePayload {
+  sessionId: string;
+  title: string;
+}
+
+export interface SnapshotPayload {
+  sessionId: string;
+}
+
+export interface ClearScrollbackPayload {
+  sessionId: string;
+}
+
+export interface OpenExternalPayload {
+  url: string;
+}
+
+export interface WriteClipboardPayload {
+  text: string;
+}

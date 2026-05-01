@@ -1,6 +1,11 @@
 import { app, BrowserWindow, Menu } from 'electron';
+import { IPC_TERMINAL_EVENT } from '@shared/constants';
 import { createMainWindow } from './window';
 import { installLogger, log } from './logger';
+import { registerClipboardIpc } from './ipc/clipboardIpc';
+import { registerShellIpc } from './ipc/shellIpc';
+import { registerTerminalIpc } from './ipc/terminalIpc';
+import { registerWindowIpc } from './ipc/windowIpc';
 import { TerminalManager } from './terminal/TerminalManager';
 
 const gotLock = app.requestSingleInstanceLock();
@@ -13,7 +18,32 @@ if (!gotLock) {
 
   let mainWindow: BrowserWindow | null = null;
   let terminalManager: TerminalManager | null = null;
+  let unregisterTerminalIpc: (() => void) | null = null;
+  let unregisterShellIpc: (() => void) | null = null;
+  let unregisterClipboardIpc: (() => void) | null = null;
+  let unregisterWindowIpc: (() => void) | null = null;
   let isQuitting = false;
+
+  function attachWindow(win: BrowserWindow): void {
+    let unsubscribeEvents: (() => void) | null = null;
+
+    win.webContents.once('did-finish-load', () => {
+      if (!terminalManager || win.isDestroyed()) return;
+      unsubscribeEvents = terminalManager.onEvent((evt) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_TERMINAL_EVENT, evt);
+        }
+      });
+    });
+
+    win.on('closed', () => {
+      if (unsubscribeEvents) {
+        unsubscribeEvents();
+        unsubscribeEvents = null;
+      }
+      if (mainWindow === win) mainWindow = null;
+    });
+  }
 
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -24,10 +54,13 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     terminalManager = new TerminalManager();
+    unregisterTerminalIpc = registerTerminalIpc(terminalManager);
+    unregisterShellIpc = registerShellIpc();
+    unregisterClipboardIpc = registerClipboardIpc();
+    unregisterWindowIpc = registerWindowIpc();
+
     mainWindow = createMainWindow();
-    mainWindow.on('closed', () => {
-      mainWindow = null;
-    });
+    attachWindow(mainWindow);
     log.info('app:ready');
 
     if (process.env['DEBUG_TERMINAL'] === '1') {
@@ -43,9 +76,7 @@ if (!gotLock) {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         mainWindow = createMainWindow();
-        mainWindow.on('closed', () => {
-          mainWindow = null;
-        });
+        attachWindow(mainWindow);
       }
     });
   });
@@ -66,6 +97,14 @@ if (!gotLock) {
       } catch (err) {
         log.warn('before-quit: closeAll failed', err);
       } finally {
+        unregisterTerminalIpc?.();
+        unregisterShellIpc?.();
+        unregisterClipboardIpc?.();
+        unregisterWindowIpc?.();
+        unregisterTerminalIpc = null;
+        unregisterShellIpc = null;
+        unregisterClipboardIpc = null;
+        unregisterWindowIpc = null;
         app.quit();
       }
     })();
