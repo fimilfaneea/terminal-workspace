@@ -17,6 +17,13 @@ body {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
+}
+
+.app-shell__placeholder {
+  flex: 1 1 auto;
+  display: flex;
   align-items: center;
   justify-content: center;
+  color: #9da5b4;
 }

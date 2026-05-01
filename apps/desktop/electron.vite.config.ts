@@ -10,6 +10,18 @@ const aliases = {
   '@shared': resolve(__dirname, 'src/shared'),
 };
 
+// @xterm/addon-canvas@0.8.0-beta.48 has a broken `module` field in its
+// package.json — it points to lib/addon-canvas.mjs but the file shipped is
+// lib/xterm-addon-canvas.mjs. Redirect package imports to the real file until
+// the canvas addon ships a fixed stable release (see CLAUDE.md deviation #2).
+const rendererAliases = {
+  ...aliases,
+  '@xterm/addon-canvas': resolve(
+    __dirname,
+    'node_modules/@xterm/addon-canvas/lib/xterm-addon-canvas.mjs',
+  ),
+};
+
 const cspPlugin = (): Plugin => ({
   name: 'inject-csp',
   transformIndexHtml: {
@@ -46,6 +58,6 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
     plugins: [react(), cspPlugin()],
-    resolve: { alias: aliases },
+    resolve: { alias: rendererAliases },
   },
 });

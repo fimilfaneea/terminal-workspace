@@ -1,0 +1,82 @@
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #1e1e1e;
+  border: 2px solid transparent;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.pane--focused {
+  border-color: #3b8eea;
+}
+
+.pane--errored {
+  border-color: #cd3131;
+}
+
+.pane__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 8px;
+  background: #252526;
+  color: #9da5b4;
+  font-size: 11px;
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.pane__title {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pane__badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.pane__badge--exited {
+  background: #3a3d41;
+  color: #d4d4d4;
+}
+
+.pane__badge--errored {
+  background: #5a1d1d;
+  color: #f5f5f5;
+}
+
+.pane__error {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  background: #5a1d1d;
+  color: #f5f5f5;
+  font-size: 12px;
+}
+
+.pane__xterm {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  padding: 4px 0 0 4px;
+  box-sizing: border-box;
+}
+
+.pane__xterm .xterm,
+.pane__xterm .xterm-viewport,
+.pane__xterm .xterm-screen {
+  height: 100% !important;
+  width: 100% !important;
+}
