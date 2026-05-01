@@ -79,6 +79,14 @@ export class TerminalManager {
     return [...this.sessions.values()].map((s) => s.getInfo());
   }
 
+  runningCount(): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.getStatus() === 'running') n++;
+    }
+    return n;
+  }
+
   private require(sessionId: string): TerminalSession {
     const session = this.sessions.get(sessionId);
     if (!session) throw new UnknownSessionError(sessionId);

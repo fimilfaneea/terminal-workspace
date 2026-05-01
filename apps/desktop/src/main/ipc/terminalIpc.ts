@@ -23,8 +23,15 @@ import type {
   SnapshotPayload,
   WritePayload,
 } from '@shared/types';
+import { isShuttingDown } from '../lifecycle';
 import { log } from '../logger';
 import type { TerminalManager } from '../terminal/TerminalManager';
+
+const SHUTTING_DOWN_RESULT: IpcResult<never> = {
+  ok: false,
+  message: 'Application is shutting down',
+  code: 'shutting_down',
+};
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -40,6 +47,7 @@ function errorCode(err: unknown): string | undefined {
 }
 
 async function wrap<T>(channel: string, fn: () => T | Promise<T>): Promise<IpcResult<T>> {
+  if (isShuttingDown()) return SHUTTING_DOWN_RESULT;
   try {
     const value = await fn();
     return { ok: true, value };
@@ -82,6 +90,7 @@ export function registerTerminalIpc(manager: TerminalManager): () => void {
   );
 
   const onWrite = (_e: Electron.IpcMainEvent, payload: WritePayload): void => {
+    if (isShuttingDown()) return;
     try {
       manager.write(payload.sessionId, payload.data);
     } catch (err) {
@@ -91,6 +100,7 @@ export function registerTerminalIpc(manager: TerminalManager): () => void {
   ipcMain.on(IPC_TERMINAL_WRITE, onWrite);
 
   const onResize = (_e: Electron.IpcMainEvent, payload: ResizePayload): void => {
+    if (isShuttingDown()) return;
     try {
       manager.resize(payload.sessionId, payload.cols, payload.rows);
     } catch (err) {

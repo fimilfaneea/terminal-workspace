@@ -73,7 +73,12 @@ export function useShortcuts(): void {
         case 'W':
         case 'w':
           e.preventDefault();
-          void store.closeTab(store.activeTabId);
+          void (async () => {
+            const result = await store.closeTab(store.activeTabId);
+            if (result.wouldCloseWindow) {
+              await window.shell.requestWindowClose();
+            }
+          })();
           return;
         case 'E':
         case 'e':
@@ -89,7 +94,13 @@ export function useShortcuts(): void {
         case 'x': {
           e.preventDefault();
           if (!tab) return;
-          void store.closePane(tab.activePaneId);
+          const paneId = tab.activePaneId;
+          void (async () => {
+            const result = await store.closePane(paneId);
+            if (result.wouldCloseWindow) {
+              await window.shell.requestWindowClose();
+            }
+          })();
           return;
         }
         case ']':

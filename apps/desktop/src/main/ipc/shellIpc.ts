@@ -1,6 +1,7 @@
 import { ipcMain, shell } from 'electron';
 import { IPC_SHELL_OPEN_EXTERNAL } from '@shared/constants';
 import type { IpcResult, OpenExternalPayload } from '@shared/types';
+import { isShuttingDown } from '../lifecycle';
 import { log } from '../logger';
 
 function parseHttpUrl(raw: string): URL | null {
@@ -17,6 +18,9 @@ export function registerShellIpc(): () => void {
   ipcMain.handle(
     IPC_SHELL_OPEN_EXTERNAL,
     async (_e, payload: OpenExternalPayload): Promise<IpcResult<void>> => {
+      if (isShuttingDown()) {
+        return { ok: false, message: 'Application is shutting down', code: 'shutting_down' };
+      }
       const url = typeof payload?.url === 'string' ? parseHttpUrl(payload.url) : null;
       if (!url) {
         return { ok: false, message: 'URL must be http(s)', code: 'invalid_url' };

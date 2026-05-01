@@ -1,10 +1,18 @@
 import { clipboard, ipcMain } from 'electron';
 import { IPC_CLIPBOARD_READ_TEXT, IPC_CLIPBOARD_WRITE_TEXT } from '@shared/constants';
 import type { IpcResult, WriteClipboardPayload } from '@shared/types';
+import { isShuttingDown } from '../lifecycle';
 import { log } from '../logger';
+
+const SHUTTING_DOWN_RESULT: IpcResult<never> = {
+  ok: false,
+  message: 'Application is shutting down',
+  code: 'shutting_down',
+};
 
 export function registerClipboardIpc(): () => void {
   ipcMain.handle(IPC_CLIPBOARD_READ_TEXT, (): IpcResult<string> => {
+    if (isShuttingDown()) return SHUTTING_DOWN_RESULT;
     try {
       return { ok: true, value: clipboard.readText() };
     } catch (err) {
@@ -17,6 +25,7 @@ export function registerClipboardIpc(): () => void {
   ipcMain.handle(
     IPC_CLIPBOARD_WRITE_TEXT,
     (_e, payload: WriteClipboardPayload): IpcResult<void> => {
+      if (isShuttingDown()) return SHUTTING_DOWN_RESULT;
       if (typeof payload?.text !== 'string') {
         return {
           ok: false,

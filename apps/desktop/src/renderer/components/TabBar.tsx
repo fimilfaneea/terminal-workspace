@@ -59,7 +59,12 @@ export function TabBar(): JSX.Element {
             isActive={tab.id === activeTabId}
             onSelect={() => setActiveTab(tab.id)}
             onClose={() => {
-              void closeTab(tab.id);
+              void (async () => {
+                const result = await closeTab(tab.id);
+                if (result.wouldCloseWindow) {
+                  await window.shell.requestWindowClose();
+                }
+              })();
             }}
             onDragStart={(e) => {
               dragFromRef.current = index;

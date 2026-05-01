@@ -1,5 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { IPC_TERMINAL_EVENT } from '@shared/constants';
+import { showCloseConfirm } from './dialogs';
+import { setShuttingDown } from './lifecycle';
 import { createMainWindow } from './window';
 import { installLogger, log } from './logger';
 import { registerClipboardIpc } from './ipc/clipboardIpc';
@@ -22,10 +24,44 @@ if (!gotLock) {
   let unregisterShellIpc: (() => void) | null = null;
   let unregisterClipboardIpc: (() => void) | null = null;
   let unregisterWindowIpc: (() => void) | null = null;
-  let isQuitting = false;
+
+  let confirmedQuit = false;
+  let quitInProgress: Promise<void> | null = null;
+
+  function proceedToQuit(): Promise<void> {
+    if (quitInProgress) return quitInProgress;
+    quitInProgress = (async () => {
+      setShuttingDown(true);
+      try {
+        if (terminalManager) await terminalManager.closeAll();
+      } catch (err) {
+        log.warn('proceedToQuit: closeAll failed', err);
+      }
+      unregisterTerminalIpc?.();
+      unregisterShellIpc?.();
+      unregisterClipboardIpc?.();
+      unregisterWindowIpc?.();
+      unregisterTerminalIpc = null;
+      unregisterShellIpc = null;
+      unregisterClipboardIpc = null;
+      unregisterWindowIpc = null;
+    })();
+    return quitInProgress;
+  }
+
+  async function confirmAndQuit(win: BrowserWindow): Promise<void> {
+    if (confirmedQuit) return;
+    const count = terminalManager?.runningCount() ?? 0;
+    const ok = await showCloseConfirm(win, count);
+    if (!ok) return;
+    confirmedQuit = true;
+    await proceedToQuit();
+    if (!win.isDestroyed()) win.destroy();
+  }
 
   function attachWindow(win: BrowserWindow): void {
     let unsubscribeEvents: (() => void) | null = null;
+    let firstLoad = true;
 
     win.webContents.once('did-finish-load', () => {
       if (!terminalManager || win.isDestroyed()) return;
@@ -34,6 +70,26 @@ if (!gotLock) {
           win.webContents.send(IPC_TERMINAL_EVENT, evt);
         }
       });
+    });
+
+    // Renderer reloads (HMR full-page or manual refresh) would otherwise leave
+    // PTYs orphaned in main while renderer state resets. Close all sessions
+    // synchronously before the new renderer mounts.
+    win.webContents.on('did-start-loading', () => {
+      if (firstLoad) {
+        firstLoad = false;
+        return;
+      }
+      if (!terminalManager || quitInProgress) return;
+      void terminalManager.closeAll(500).catch((err) => {
+        log.warn('dev-reload: closeAll failed', err);
+      });
+    });
+
+    win.on('close', (e) => {
+      if (confirmedQuit) return;
+      e.preventDefault();
+      void confirmAndQuit(win);
     });
 
     win.on('closed', () => {
@@ -57,7 +113,10 @@ if (!gotLock) {
     unregisterTerminalIpc = registerTerminalIpc(terminalManager);
     unregisterShellIpc = registerShellIpc();
     unregisterClipboardIpc = registerClipboardIpc();
-    unregisterWindowIpc = registerWindowIpc();
+    unregisterWindowIpc = registerWindowIpc({
+      getMainWindow: () => mainWindow,
+      confirmAndQuit,
+    });
 
     mainWindow = createMainWindow();
     attachWindow(mainWindow);
@@ -87,26 +146,12 @@ if (!gotLock) {
     }
   });
 
+  // Fallback for programmatic quit / signals not coming through the window
+  // close button. proceedToQuit is idempotent, so the window-close path's
+  // earlier call is a no-op here.
   app.on('before-quit', (event) => {
-    if (isQuitting || !terminalManager) return;
-    isQuitting = true;
+    if (quitInProgress) return;
     event.preventDefault();
-    void (async () => {
-      try {
-        await terminalManager!.closeAll();
-      } catch (err) {
-        log.warn('before-quit: closeAll failed', err);
-      } finally {
-        unregisterTerminalIpc?.();
-        unregisterShellIpc?.();
-        unregisterClipboardIpc?.();
-        unregisterWindowIpc?.();
-        unregisterTerminalIpc = null;
-        unregisterShellIpc = null;
-        unregisterClipboardIpc = null;
-        unregisterWindowIpc = null;
-        app.quit();
-      }
-    })();
+    void proceedToQuit().then(() => app.quit());
   });
 }
