@@ -54,7 +54,20 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+}
+
+.tab__rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  background: #0e0e0e;
+  color: #ffffff;
+  border: 1px solid #3b8eea;
+  outline: none;
+  padding: 1px 4px;
+  font: inherit;
+  border-radius: 2px;
+  box-sizing: border-box;
 }
 
 .tab__dot {

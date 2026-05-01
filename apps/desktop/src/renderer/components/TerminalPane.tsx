@@ -7,6 +7,13 @@ import { SearchAddon } from '@xterm/addon-search';
 import type { TerminalEvent } from '@shared/types';
 import { ONE_DARK_THEME } from '@renderer/lib/theme';
 import { useWorkspaceStore } from '@renderer/state/workspaceStore';
+import { registerPaneHandle } from '@renderer/lib/paneHandles';
+import { ContextMenu } from './ContextMenu';
+import { FindBar } from './FindBar';
+import {
+  RenamableTitle,
+  type RenamableTitleHandle,
+} from './RenamableTitle';
 import '@xterm/xterm/css/xterm.css';
 
 const RESIZE_DEBOUNCE_MS = 50;
@@ -18,6 +25,11 @@ interface Props {
   isVisible: boolean;
 }
 
+interface ContextMenuState {
+  position: { x: number; y: number };
+  hasSelection: boolean;
+}
+
 export function TerminalPane({
   sessionId,
   paneId,
@@ -27,6 +39,8 @@ export function TerminalPane({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const renameRef = useRef<RenamableTitleHandle | null>(null);
 
   const status = useWorkspaceStore(
     (s) => s.sessionsById[sessionId]?.info.status ?? 'starting',
@@ -39,6 +53,10 @@ export function TerminalPane({
     (s) => s.sessionsById[sessionId]?.info.title ?? '',
   );
   const fontSize = useWorkspaceStore((s) => s.fontSizePx);
+  const renameSession = useWorkspaceStore((s) => s.renameSession);
+
+  const [findBarOpen, setFindBarOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const statusRef = useRef(status);
   useEffect(() => {
@@ -78,6 +96,7 @@ export function TerminalPane({
 
     termRef.current = term;
     fitRef.current = fit;
+    searchRef.current = search;
 
     const onDataDisposable = term.onData((data) => {
       if (statusRef.current !== 'running') return;
@@ -175,8 +194,22 @@ export function TerminalPane({
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    return registerPaneHandle({
+      paneId,
+      sessionId,
+      getSelection: () => termRef.current?.getSelection() ?? '',
+      paste: (text) => window.terminal.write(sessionId, text),
+      openFindBar: () => setFindBarOpen(true),
+      closeFindBar: () => setFindBarOpen(false),
+      startRename: () => renameRef.current?.startEditing(),
+      focus: () => termRef.current?.focus(),
+    });
+  }, [paneId, sessionId]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -222,9 +255,24 @@ export function TerminalPane({
       className={className}
       data-pane-id={paneId}
       onMouseDown={() => termRef.current?.focus()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setContextMenu({
+          position: { x: e.clientX, y: e.clientY },
+          hasSelection: Boolean(termRef.current?.getSelection()),
+        });
+      }}
     >
       <div className="pane__header">
-        <span className="pane__title">{title}</span>
+        <RenamableTitle
+          ref={renameRef}
+          title={title}
+          className="pane__title"
+          inputClassName="pane__rename-input"
+          onRename={(next) => {
+            void renameSession(sessionId, next);
+          }}
+        />
         {status === 'exited' && (
           <span className="pane__badge pane__badge--exited">
             exited{exitCode !== null ? ` (${exitCode})` : ''}
@@ -238,6 +286,21 @@ export function TerminalPane({
         <div className="pane__error">{errorMessage}</div>
       )}
       <div className="pane__xterm" ref={containerRef} />
+      {findBarOpen && searchRef.current && (
+        <FindBar
+          searchAddon={searchRef.current}
+          onClose={() => setFindBarOpen(false)}
+        />
+      )}
+      {contextMenu && (
+        <ContextMenu
+          paneId={paneId}
+          sessionId={sessionId}
+          hasSelection={contextMenu.hasSelection}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

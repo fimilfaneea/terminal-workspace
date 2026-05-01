@@ -1,5 +1,14 @@
 import { useEffect } from 'react';
-import { useWorkspaceStore } from '@renderer/state/workspaceStore';
+import {
+  selectActivePane,
+  selectActiveTab,
+  useWorkspaceStore,
+} from '@renderer/state/workspaceStore';
+import { getPaneHandle } from '@renderer/lib/paneHandles';
+import {
+  copySelectionFromPane,
+  pasteIntoPane,
+} from '@renderer/lib/clipboard';
 
 export function useShortcuts(): void {
   useEffect(() => {
@@ -8,18 +17,52 @@ export function useShortcuts(): void {
       const key = e.key;
       const store = useWorkspaceStore.getState();
 
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && key === 'Tab') {
+      // --- Ctrl-only (no Shift, no Alt) shortcuts ---
+      if (!e.shiftKey && !e.altKey) {
+        if (key === 'Tab') {
+          e.preventDefault();
+          cycleTab(1);
+          return;
+        }
+        if (key === '=' || key === '+') {
+          e.preventDefault();
+          store.bumpFontSize(1);
+          return;
+        }
+        if (key === '-' || key === '_') {
+          e.preventDefault();
+          store.bumpFontSize(-1);
+          return;
+        }
+        if (key === '0') {
+          e.preventDefault();
+          store.resetFontSize();
+          return;
+        }
+      }
+
+      // --- Ctrl+Shift+= (i.e. Ctrl+Plus on US keyboards) ---
+      if (e.shiftKey && !e.altKey && (key === '+' || key === '=')) {
         e.preventDefault();
-        cycleTab(1);
+        store.bumpFontSize(1);
         return;
       }
-      if (e.ctrlKey && e.shiftKey && !e.altKey && key === 'Tab') {
+
+      // --- Ctrl+Shift+Tab ---
+      if (e.shiftKey && !e.altKey && key === 'Tab') {
         e.preventDefault();
         cycleTab(-1);
         return;
       }
 
+      // From here: require Ctrl+Shift, no Alt.
       if (!e.shiftKey || e.altKey) return;
+
+      const tab = selectActiveTab(store);
+      const activePaneId = tab?.activePaneId ?? '';
+      const focusedPane = selectActivePane(store);
+      const focusedSessionId =
+        focusedPane && focusedPane.type === 'leaf' ? focusedPane.sessionId : null;
 
       switch (key) {
         case 'T':
@@ -45,7 +88,6 @@ export function useShortcuts(): void {
         case 'X':
         case 'x': {
           e.preventDefault();
-          const tab = store.tabs.find((t) => t.id === store.activeTabId);
           if (!tab) return;
           void store.closePane(tab.activePaneId);
           return;
@@ -57,6 +99,30 @@ export function useShortcuts(): void {
         case '[':
           e.preventDefault();
           store.focusPrevPane();
+          return;
+        case 'R':
+        case 'r':
+          e.preventDefault();
+          getPaneHandle(activePaneId)?.startRename();
+          return;
+        case 'F':
+        case 'f':
+          e.preventDefault();
+          getPaneHandle(activePaneId)?.openFindBar();
+          return;
+        case 'C':
+        case 'c':
+          e.preventDefault();
+          void copySelectionFromPane(activePaneId);
+          return;
+        case 'V':
+        case 'v':
+          e.preventDefault();
+          void pasteIntoPane(activePaneId);
+          return;
+        case 'Enter':
+          e.preventDefault();
+          if (focusedSessionId) void store.restartSession(focusedSessionId);
           return;
         default:
           return;

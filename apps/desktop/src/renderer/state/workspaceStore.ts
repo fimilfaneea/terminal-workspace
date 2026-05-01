@@ -20,6 +20,7 @@ import {
 import type {
   CloseResult,
   PaneNode,
+  PasteConfirmRequest,
   SessionView,
   SplitDirection,
   Tab,
@@ -72,6 +73,7 @@ const initialState: WorkspaceState = {
   sessionsById: {},
   fontSizePx: DEFAULT_FONT_SIZE_PX,
   bootstrapping: false,
+  pasteConfirmRequest: null,
 };
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -315,6 +317,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   resetFontSize: () => {
     set({ fontSizePx: DEFAULT_FONT_SIZE_PX });
+  },
+
+  // --- paste confirm -----------------------------------------------------
+
+  requestPasteConfirm: (req: PasteConfirmRequest) => {
+    set({ pasteConfirmRequest: req });
+  },
+
+  dismissPasteConfirm: () => {
+    set({ pasteConfirmRequest: null });
   },
 }));
 

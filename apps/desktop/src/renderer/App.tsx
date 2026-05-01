@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { PasteConfirmDialog } from './components/PasteConfirmDialog';
 import { SplitTree } from './components/SplitTree';
 import { TabBar } from './components/TabBar';
 import { usePersistedFontSize } from './hooks/usePersistedFontSize';
@@ -41,6 +42,7 @@ export function App(): JSX.Element {
           })
         )}
       </div>
+      <PasteConfirmDialog />
     </div>
   );
 }

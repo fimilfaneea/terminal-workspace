@@ -3,7 +3,9 @@ import {
   selectTabTitle,
   useWorkspaceStore,
 } from '@renderer/state/workspaceStore';
+import { findLeaf } from '@renderer/lib/splitTree';
 import type { Tab } from '@renderer/state/types';
+import { RenamableTitle } from './RenamableTitle';
 
 const DRAG_MIME = 'application/x-tab-index';
 
@@ -113,6 +115,7 @@ function TabItem({
   dropIndicator,
 }: TabItemProps): JSX.Element {
   const title = useWorkspaceStore((s) => selectTabTitle(s, tab.id));
+  const renameSession = useWorkspaceStore((s) => s.renameSession);
   const fallback = `Terminal ${index + 1}`;
   const className = [
     'tab',
@@ -138,7 +141,16 @@ function TabItem({
         <span className="tab__dot tab__dot--unread" />
       )}
       {tab.hasError && <span className="tab__dot tab__dot--error" />}
-      <span className="tab__title">{title || fallback}</span>
+      <RenamableTitle
+        title={title || fallback}
+        className="tab__title"
+        inputClassName="tab__rename-input"
+        onRename={(next) => {
+          const focused = findLeaf(tab.rootPane, tab.activePaneId);
+          if (!focused) return;
+          void renameSession(focused.sessionId, next);
+        }}
+      />
       <button
         className="tab__close"
         type="button"

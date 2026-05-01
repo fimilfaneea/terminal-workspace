@@ -42,3 +42,79 @@ body {
   min-width: 0;
   min-height: 0;
 }
+
+/* --- Paste confirm modal -------------------------------------------- */
+
+.paste-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.paste-confirm {
+  min-width: 320px;
+  max-width: 480px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #3a3d41;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 16px 20px;
+  font-size: 13px;
+}
+
+.paste-confirm__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+.paste-confirm__body {
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+.paste-confirm__body strong {
+  color: #ffffff;
+}
+
+.paste-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.paste-confirm__btn {
+  min-width: 84px;
+  padding: 6px 14px;
+  background: #3a3d41;
+  color: #d4d4d4;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.paste-confirm__btn:hover {
+  background: #4a4d51;
+}
+
+.paste-confirm__btn:focus-visible,
+.paste-confirm__btn:focus {
+  outline: none;
+  border-color: #3b8eea;
+}
+
+.paste-confirm__btn--primary {
+  background: #0e639c;
+  color: #ffffff;
+}
+
+.paste-confirm__btn--primary:hover {
+  background: #1177bb;
+}

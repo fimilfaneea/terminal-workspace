@@ -127,3 +127,118 @@
 .split-separator[data-separator='focus'] {
   background: #3b8eea;
 }
+
+/* --- Inline rename input on the pane header -------------------------- */
+
+.pane__rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #0e0e0e;
+  color: #ffffff;
+  border: 1px solid #3b8eea;
+  outline: none;
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 11px;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+/* --- Right-click context menu --------------------------------------- */
+
+.pane__context-menu {
+  position: fixed;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: #252526;
+  color: #d4d4d4;
+  border: 1px solid #3a3d41;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  font-size: 12px;
+  outline: none;
+  user-select: none;
+}
+
+.pane__context-menu-item {
+  display: block;
+  padding: 4px 14px;
+  height: 20px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.pane__context-menu-item--highlight {
+  background: #094771;
+  color: #ffffff;
+}
+
+.pane__context-menu-item--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Find bar overlay ----------------------------------------------- */
+
+.pane__find-bar {
+  position: absolute;
+  top: 26px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #252526;
+  border: 1px solid #3a3d41;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  font-size: 12px;
+}
+
+.pane__find-input {
+  width: 180px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #3a3d41;
+  outline: none;
+  padding: 2px 6px;
+  font: inherit;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.pane__find-input:focus {
+  border-color: #3b8eea;
+}
+
+.pane__find-toggle,
+.pane__find-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #9da5b4;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pane__find-toggle:hover,
+.pane__find-btn:hover {
+  background: #3a3d41;
+  color: #ffffff;
+}
+
+.pane__find-toggle--active {
+  background: #094771;
+  color: #ffffff;
+  border-color: #3b8eea;
+}

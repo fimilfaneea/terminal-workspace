@@ -28,12 +28,20 @@ export interface Tab {
   hasError: boolean;
 }
 
+export interface PasteConfirmRequest {
+  sessionId: string;
+  text: string;
+  lines: number;
+  bytes: number;
+}
+
 export interface WorkspaceState {
   tabs: Tab[];
   activeTabId: string;
   sessionsById: Record<string, SessionView>;
   fontSizePx: number;
   bootstrapping: boolean;
+  pasteConfirmRequest: PasteConfirmRequest | null;
 }
 
 export interface CloseResult {
@@ -64,6 +72,9 @@ export interface WorkspaceActions {
   setFontSize: (px: number) => void;
   bumpFontSize: (delta: number) => void;
   resetFontSize: () => void;
+
+  requestPasteConfirm: (req: PasteConfirmRequest) => void;
+  dismissPasteConfirm: () => void;
 }
 
 export type WorkspaceStore = WorkspaceState & WorkspaceActions;

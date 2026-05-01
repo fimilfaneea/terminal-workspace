@@ -3,6 +3,8 @@ export const DEFAULT_FONT_SIZE_PX = 13;
 export const MIN_FONT_SIZE_PX = 8;
 export const MAX_FONT_SIZE_PX = 32;
 
+export const PASTE_CONFIRM_BYTE_THRESHOLD = 1024;
+
 export const IPC_TERMINAL_CREATE = 'terminal:create';
 export const IPC_TERMINAL_WRITE = 'terminal:write';
 export const IPC_TERMINAL_RESIZE = 'terminal:resize';
