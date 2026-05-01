@@ -15,9 +15,15 @@ interface Props {
   sessionId: string;
   paneId: string;
   isFocused: boolean;
+  isVisible: boolean;
 }
 
-export function TerminalPane({ sessionId, paneId, isFocused }: Props): JSX.Element {
+export function TerminalPane({
+  sessionId,
+  paneId,
+  isFocused,
+  isVisible,
+}: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -183,6 +189,25 @@ export function TerminalPane({ sessionId, paneId, isFocused }: Props): JSX.Eleme
       /* container not measurable yet */
     }
   }, [fontSize]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const id = requestAnimationFrame(() => {
+      const fit = fitRef.current;
+      if (!fit) return;
+      try {
+        fit.fit();
+      } catch {
+        /* container not measurable yet */
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isFocused || !isVisible) return;
+    termRef.current?.focus();
+  }, [isFocused, isVisible]);
 
   const className = [
     'pane',

@@ -15,6 +15,7 @@ import {
   focusPrev,
   removeLeaf,
   splitLeaf,
+  updateSplitRatio,
 } from '@renderer/lib/splitTree';
 import type {
   CloseResult,
@@ -266,6 +267,18 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         tabs: s.tabs.map((t) =>
           t.id === tab.id ? { ...t, activePaneId: prev } : t,
         ),
+      };
+    });
+  },
+
+  setSplitRatio: (tabId: string, splitNodeId: string, ratio: number) => {
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab) return s;
+      const nextRoot = updateSplitRatio(tab.rootPane, splitNodeId, ratio);
+      if (nextRoot === tab.rootPane) return s;
+      return {
+        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, rootPane: nextRoot } : t)),
       };
     });
   },

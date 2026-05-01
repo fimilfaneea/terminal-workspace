@@ -1,19 +1,20 @@
 import { useEffect } from 'react';
-import { TerminalPane } from './components/TerminalPane';
+import { SplitTree } from './components/SplitTree';
+import { TabBar } from './components/TabBar';
 import { usePersistedFontSize } from './hooks/usePersistedFontSize';
+import { useShortcuts } from './hooks/useShortcuts';
 import { useTerminalEvents } from './hooks/useTerminalEvents';
-import { selectActivePane, useWorkspaceStore } from './state/workspaceStore';
+import { useWorkspaceStore } from './state/workspaceStore';
 
 export function App(): JSX.Element {
   usePersistedFontSize();
   useTerminalEvents();
+  useShortcuts();
 
   const initWorkspace = useWorkspaceStore((s) => s.initWorkspace);
   const fontSize = useWorkspaceStore((s) => s.fontSizePx);
-  const activePane = useWorkspaceStore(selectActivePane);
-  const sessionExists = useWorkspaceStore((s) =>
-    activePane?.type === 'leaf' ? s.sessionsById[activePane.sessionId] != null : false,
-  );
+  const tabs = useWorkspaceStore((s) => s.tabs);
+  const activeTabId = useWorkspaceStore((s) => s.activeTabId);
 
   useEffect(() => {
     void initWorkspace();
@@ -21,15 +22,25 @@ export function App(): JSX.Element {
 
   return (
     <div className="app-shell" style={{ fontSize }}>
-      {activePane?.type === 'leaf' && sessionExists ? (
-        <TerminalPane
-          sessionId={activePane.sessionId}
-          paneId={activePane.id}
-          isFocused
-        />
-      ) : (
-        <div className="app-shell__placeholder">Starting…</div>
-      )}
+      <TabBar />
+      <div className="app-shell__panes">
+        {tabs.length === 0 ? (
+          <div className="app-shell__placeholder">Starting…</div>
+        ) : (
+          tabs.map((tab) => {
+            const isVisible = tab.id === activeTabId;
+            return (
+              <div
+                key={tab.id}
+                className="app-shell__tab"
+                style={{ display: isVisible ? 'flex' : 'none' }}
+              >
+                <SplitTree tab={tab} isVisible={isVisible} />
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

@@ -53,6 +53,7 @@ export interface WorkspaceActions {
   setActivePane: (tabId: string, paneId: string) => void;
   focusNextPane: () => void;
   focusPrevPane: () => void;
+  setSplitRatio: (tabId: string, splitNodeId: string, ratio: number) => void;
 
   renameSession: (sessionId: string, title: string) => Promise<void>;
   restartSession: (sessionId: string) => Promise<void>;

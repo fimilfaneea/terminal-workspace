@@ -115,3 +115,25 @@ export function focusPrev(root: PaneNode, currentPaneId: string): string {
   if (idx === -1) return leaves[0] ?? currentPaneId;
   return leaves[(idx - 1 + leaves.length) % leaves.length] ?? currentPaneId;
 }
+
+const MIN_RATIO = 0.05;
+const MAX_RATIO = 0.95;
+
+export function updateSplitRatio(
+  root: PaneNode,
+  splitNodeId: string,
+  ratio: number,
+): PaneNode {
+  if (root.type === 'leaf') return root;
+  const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio));
+  if (root.id === splitNodeId) {
+    if (root.ratio === clamped) return root;
+    return { ...root, ratio: clamped };
+  }
+  const [a, b] = root.children;
+  const left = updateSplitRatio(a, splitNodeId, ratio);
+  if (left !== a) return { ...root, children: [left, b] };
+  const right = updateSplitRatio(b, splitNodeId, ratio);
+  if (right !== b) return { ...root, children: [a, right] };
+  return root;
+}
