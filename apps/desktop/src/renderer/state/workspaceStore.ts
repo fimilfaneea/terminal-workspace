@@ -64,7 +64,18 @@ function makeTabFromSession(sessionId: string): Tab {
     activePaneId: leaf.id,
     hasUnreadActivity: false,
     hasError: false,
+    nameOverride: null,
   };
+}
+
+function makeCreatePayload(cwd: string | undefined): {
+  cols: number;
+  rows: number;
+  cwd?: string;
+} {
+  return cwd && cwd.length > 0
+    ? { cols: INITIAL_COLS, rows: INITIAL_ROWS, cwd }
+    : { cols: INITIAL_COLS, rows: INITIAL_ROWS };
 }
 
 const initialState: WorkspaceState = {
@@ -86,10 +97,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (state.bootstrapping || state.tabs.length > 0) return;
     set({ bootstrapping: true });
     try {
-      const info = await window.terminal.create({
-        cols: INITIAL_COLS,
-        rows: INITIAL_ROWS,
-      });
+      const info = await window.terminal.create(makeCreatePayload(undefined));
       const tab = makeTabFromSession(info.id);
       set((s) => ({
         tabs: [...s.tabs, tab],
@@ -105,16 +113,24 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   // --- tabs --------------------------------------------------------------
 
-  newTab: async () => {
-    const info = await window.terminal.create({
-      cols: INITIAL_COLS,
-      rows: INITIAL_ROWS,
-    });
+  newTab: async (cwd?: string) => {
+    const info = await window.terminal.create(makeCreatePayload(cwd));
     const tab = makeTabFromSession(info.id);
     set((s) => ({
       tabs: [...s.tabs, tab],
       activeTabId: tab.id,
       sessionsById: { ...s.sessionsById, [info.id]: makeSessionView(info) },
+    }));
+  },
+
+  renameTab: (tabId: string, name: string) => {
+    const trimmed = name.trim();
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, nameOverride: trimmed.length > 0 ? trimmed : null }
+          : t,
+      ),
     }));
   },
 
@@ -173,15 +189,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   // --- panes -------------------------------------------------------------
 
-  splitFocusedPane: async (direction: SplitDirection) => {
+  splitFocusedPane: async (direction: SplitDirection, cwd?: string) => {
     const state = get();
     const tab = state.tabs.find((t) => t.id === state.activeTabId);
     if (!tab) return;
     const focusedPaneId = tab.activePaneId;
-    const info = await window.terminal.create({
-      cols: INITIAL_COLS,
-      rows: INITIAL_ROWS,
-    });
+    const info = await window.terminal.create(makeCreatePayload(cwd));
     const newPane = createLeaf(info.id);
     const newRoot = splitLeaf(tab.rootPane, focusedPaneId, direction, newPane);
     set((s) => ({
@@ -433,6 +446,7 @@ export function selectActivePane(s: WorkspaceState): PaneNode | null {
 export function selectTabTitle(s: WorkspaceState, tabId: string): string {
   const tab = s.tabs.find((t) => t.id === tabId);
   if (!tab) return '';
+  if (tab.nameOverride) return tab.nameOverride;
   const focused = findLeaf(tab.rootPane, tab.activePaneId);
   if (!focused) return '';
   return s.sessionsById[focused.sessionId]?.info.title ?? '';

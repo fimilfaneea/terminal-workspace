@@ -39,6 +39,75 @@ export function useShortcuts(): void {
           store.resetFontSize();
           return;
         }
+
+        // Browser-style shortcuts (additive aliases for the Ctrl+Shift+ ones).
+        // Skip when the user is typing in an input/textarea (find bar, rename).
+        if (!isEditableTarget(e.target)) {
+          if (key === 't' || key === 'T') {
+            e.preventDefault();
+            void store.newTab();
+            return;
+          }
+          if (key === 'w' || key === 'W') {
+            e.preventDefault();
+            void (async () => {
+              const result = await store.closeTab(store.activeTabId);
+              if (result.wouldCloseWindow) {
+                await window.shell.requestWindowClose();
+              }
+            })();
+            return;
+          }
+          if (key === 'f' || key === 'F') {
+            const t = selectActiveTab(store);
+            const paneId = t?.activePaneId ?? '';
+            if (paneId) {
+              e.preventDefault();
+              getPaneHandle(paneId)?.openFindBar();
+              return;
+            }
+          }
+          if (key >= '1' && key <= '9') {
+            const tabs = store.tabs;
+            if (tabs.length > 0) {
+              const idx = key === '9' ? tabs.length - 1 : Number.parseInt(key, 10) - 1;
+              const target = tabs[idx];
+              if (target) {
+                e.preventDefault();
+                store.setActiveTab(target.id);
+              }
+              return;
+            }
+          }
+
+          // Smart Ctrl+C / Ctrl+V (browser-style copy/paste).
+          // Ctrl+C copies if selection exists; otherwise falls through to xterm
+          // so the shell receives SIGINT.
+          if (key === 'c' || key === 'C') {
+            const t = selectActiveTab(store);
+            const paneId = t?.activePaneId ?? '';
+            const handle = paneId ? getPaneHandle(paneId) : undefined;
+            const sel = handle?.getSelection() ?? '';
+            if (sel.length > 0) {
+              e.preventDefault();
+              void (async () => {
+                await copySelectionFromPane(paneId);
+                handle?.clearSelection();
+              })();
+              return;
+            }
+            // No selection: do not preventDefault, let SIGINT through.
+          }
+          if (key === 'v' || key === 'V') {
+            const t = selectActiveTab(store);
+            const paneId = t?.activePaneId ?? '';
+            if (paneId) {
+              e.preventDefault();
+              void pasteIntoPane(paneId);
+              return;
+            }
+          }
+        }
       }
 
       // --- Ctrl+Shift+= (i.e. Ctrl+Plus on US keyboards) ---
@@ -153,4 +222,12 @@ function cycleTab(delta: number): void {
   const next = (idx + delta + tabs.length) % tabs.length;
   const target = tabs[next];
   if (target) setActiveTab(target.id);
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
+  if (target.isContentEditable) return true;
+  return false;
 }

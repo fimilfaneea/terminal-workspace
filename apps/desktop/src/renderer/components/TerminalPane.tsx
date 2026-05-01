@@ -203,6 +203,7 @@ export function TerminalPane({
       paneId,
       sessionId,
       getSelection: () => termRef.current?.getSelection() ?? '',
+      clearSelection: () => termRef.current?.clearSelection(),
       paste: (text) => window.terminal.write(sessionId, text),
       openFindBar: () => setFindBarOpen(true),
       closeFindBar: () => setFindBarOpen(false),

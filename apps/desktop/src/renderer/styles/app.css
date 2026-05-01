@@ -118,3 +118,175 @@ body {
 .paste-confirm__btn--primary:hover {
   background: #1177bb;
 }
+
+/* --- Manage cwd presets dialog -------------------------------------- */
+
+.manage-presets {
+  min-width: 520px;
+  max-width: 640px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #3a3d41;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 16px 20px;
+  font-size: 13px;
+  outline: none;
+}
+
+.manage-presets__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+}
+
+.manage-presets__list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #3a3d41;
+  border-radius: 4px;
+  background: #181818;
+  margin-bottom: 12px;
+}
+
+.manage-presets__empty {
+  padding: 12px;
+  color: #9da5b4;
+  text-align: center;
+  font-style: italic;
+}
+
+.manage-presets__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.manage-presets__row:last-child {
+  border-bottom: none;
+}
+
+.manage-presets__label {
+  flex: 0 0 140px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #ffffff;
+  padding: 2px 6px;
+  text-align: left;
+  font: inherit;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manage-presets__label:hover {
+  background: #252526;
+  border-color: #3a3d41;
+}
+
+.manage-presets__edit-input {
+  flex: 0 0 140px;
+  background: #0e0e0e;
+  color: #ffffff;
+  border: 1px solid #3b8eea;
+  outline: none;
+  padding: 2px 6px;
+  font: inherit;
+  border-radius: 2px;
+}
+
+.manage-presets__path {
+  flex: 1 1 auto;
+  color: #9da5b4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manage-presets__remove {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #9da5b4;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.manage-presets__remove:hover {
+  background: #5a1d1d;
+  color: #ffffff;
+}
+
+.manage-presets__add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.manage-presets__input {
+  flex: 0 0 auto;
+  width: 140px;
+  background: #0e0e0e;
+  color: #d4d4d4;
+  border: 1px solid #3a3d41;
+  outline: none;
+  padding: 4px 6px;
+  font: inherit;
+  border-radius: 2px;
+}
+
+.manage-presets__input:focus {
+  border-color: #3b8eea;
+}
+
+.manage-presets__input--path {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.manage-presets__btn {
+  padding: 4px 10px;
+  background: #3a3d41;
+  color: #d4d4d4;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.manage-presets__btn:hover {
+  background: #4a4d51;
+}
+
+.manage-presets__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.manage-presets__btn--primary {
+  background: #0e639c;
+  color: #ffffff;
+}
+
+.manage-presets__btn--primary:hover {
+  background: #1177bb;
+}
+
+.manage-presets__btn--primary:disabled {
+  background: #0e639c;
+}
+
+.manage-presets__actions {
+  display: flex;
+  justify-content: flex-end;
+}

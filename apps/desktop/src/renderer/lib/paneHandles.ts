@@ -2,6 +2,7 @@ export interface PaneHandle {
   paneId: string;
   sessionId: string;
   getSelection: () => string;
+  clearSelection: () => void;
   paste: (text: string) => void;
   openFindBar: () => void;
   closeFindBar: () => void;

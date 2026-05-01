@@ -81,3 +81,10 @@ export interface OpenExternalPayload {
 export interface WriteClipboardPayload {
   text: string;
 }
+
+export interface DefaultCwds {
+  home: string;
+  desktop: string | null;
+  documents: string | null;
+  downloads: string | null;
+}

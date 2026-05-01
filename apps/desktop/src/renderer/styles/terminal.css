@@ -163,7 +163,10 @@
 }
 
 .pane__context-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 4px 14px;
   height: 20px;
   line-height: 20px;
@@ -178,6 +181,32 @@
 .pane__context-menu-item--disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.pane__context-menu-label {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pane__context-menu-shortcut {
+  flex: 0 0 auto;
+  color: #7d8590;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.pane__context-menu-item--highlight .pane__context-menu-shortcut {
+  color: #cfd5db;
+}
+
+.pane__context-menu-sep {
+  display: block;
+  margin: 4px 0;
+  height: 1px;
+  background: #3a3d41;
+  list-style: none;
 }
 
 /* --- Find bar overlay ----------------------------------------------- */

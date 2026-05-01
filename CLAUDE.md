@@ -102,14 +102,17 @@ These are documented in `plan.md` §2.0 and must not be reverted:
 
 ---
 
-## Persistence (Phase 2, locked)
+## Persistence
 
-Two things and only two things persist across launches:
+Three things and only three things persist across launches:
 
 1. **Window size + position** via `electron-window-state` (state file in `app.getPath('userData')`). Tabs/splits/sessions are explicitly NOT persisted.
-2. **Global font size** via `localStorage[FONT_SIZE_STORAGE_KEY]` (= `'terminalWorkspace.fontSizePx.v1'`), clamped to `[MIN_FONT_SIZE_PX, MAX_FONT_SIZE_PX]` = `[8, 32]`, default `13`. Hook: `src/renderer/hooks/usePersistedFontSize.ts`. The `v1` suffix is the migration anchor — Phase 6 will move source-of-truth to a zustand persisted store.
+2. **Global font size** via `localStorage[FONT_SIZE_STORAGE_KEY]` (= `'terminalWorkspace.fontSizePx.v1'`), clamped to `[MIN_FONT_SIZE_PX, MAX_FONT_SIZE_PX]` = `[8, 32]`, default `13`. Hook: `src/renderer/hooks/usePersistedFontSize.ts`.
+3. **User cwd presets** via `localStorage[CWD_PRESETS_STORAGE_KEY]` (= `'terminalWorkspace.cwdPresets.v1'`). JSON array `[{ id, label, path }]`. Hook: `src/renderer/hooks/usePersistedCwdPresets.ts`. Built-in presets (Home/Desktop/Documents/Downloads) are derived from `app.getPath()` at runtime and not stored.
 
-When in doubt, *don't add new persistence*. Restart-clean is a feature, not a bug.
+The `v1` suffix on each storage key is the migration anchor.
+
+When in doubt, *don't add new persistence*. Restart-clean is the default; window state, font size, and user-defined cwd presets are the only sanctioned exceptions.
 
 ---
 

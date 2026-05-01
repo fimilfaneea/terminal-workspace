@@ -26,6 +26,7 @@ export interface Tab {
   activePaneId: string;
   hasUnreadActivity: boolean;
   hasError: boolean;
+  nameOverride: string | null;
 }
 
 export interface PasteConfirmRequest {
@@ -51,12 +52,13 @@ export interface CloseResult {
 export interface WorkspaceActions {
   initWorkspace: () => Promise<void>;
 
-  newTab: () => Promise<void>;
+  newTab: (cwd?: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<CloseResult>;
   setActiveTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  renameTab: (tabId: string, name: string) => void;
 
-  splitFocusedPane: (direction: SplitDirection) => Promise<void>;
+  splitFocusedPane: (direction: SplitDirection, cwd?: string) => Promise<void>;
   closePane: (paneId: string) => Promise<CloseResult>;
   setActivePane: (tabId: string, paneId: string) => void;
   focusNextPane: () => void;

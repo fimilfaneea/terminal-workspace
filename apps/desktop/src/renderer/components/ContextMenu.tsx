@@ -14,14 +14,19 @@ interface Props {
   onClose: () => void;
 }
 
-interface Item {
-  label: string;
-  disabled?: boolean;
-  onActivate: () => void;
-}
+type Item =
+  | {
+      kind: 'item';
+      label: string;
+      shortcut?: string;
+      disabled?: boolean;
+      onActivate: () => void;
+    }
+  | { kind: 'separator' };
 
-const MENU_WIDTH = 200;
+const MENU_WIDTH = 220;
 const ITEM_HEIGHT = 28;
+const SEPARATOR_HEIGHT = 9;
 const VERTICAL_PADDING = 8;
 
 export function ContextMenu({
@@ -34,57 +39,96 @@ export function ContextMenu({
   const clearScrollback = useWorkspaceStore((s) => s.clearScrollback);
   const restartSession = useWorkspaceStore((s) => s.restartSession);
   const closePane = useWorkspaceStore((s) => s.closePane);
+  const splitFocusedPane = useWorkspaceStore((s) => s.splitFocusedPane);
+  const requestWindowClose = (): Promise<void> => window.shell.requestWindowClose();
 
   const items: Item[] = useMemo(
     () => [
       {
+        kind: 'item',
         label: 'Copy',
+        shortcut: 'Ctrl+C',
         disabled: !hasSelection,
         onActivate: () => {
           void copySelectionFromPane(paneId);
         },
       },
       {
+        kind: 'item',
         label: 'Paste',
+        shortcut: 'Ctrl+V',
         onActivate: () => {
           void pasteIntoPane(paneId);
         },
       },
+      { kind: 'separator' },
       {
+        kind: 'item',
+        label: 'Split right',
+        shortcut: 'Ctrl+Shift+E',
+        onActivate: () => {
+          void splitFocusedPane('horizontal');
+        },
+      },
+      {
+        kind: 'item',
+        label: 'Split down',
+        shortcut: 'Ctrl+Shift+O',
+        onActivate: () => {
+          void splitFocusedPane('vertical');
+        },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: 'Find',
+        shortcut: 'Ctrl+F',
+        onActivate: () => {
+          getPaneHandle(paneId)?.openFindBar();
+        },
+      },
+      {
+        kind: 'item',
         label: 'Clear scrollback',
         onActivate: () => {
           void clearScrollback(sessionId);
         },
       },
       {
-        label: 'Find',
-        onActivate: () => {
-          getPaneHandle(paneId)?.openFindBar();
-        },
-      },
-      {
-        label: 'Rename',
+        kind: 'item',
+        label: 'Rename pane',
+        shortcut: 'Ctrl+Shift+R',
         onActivate: () => {
           getPaneHandle(paneId)?.startRename();
         },
       },
       {
+        kind: 'item',
         label: 'Restart',
+        shortcut: 'Ctrl+Shift+Enter',
         onActivate: () => {
           void restartSession(sessionId);
         },
       },
+      { kind: 'separator' },
       {
+        kind: 'item',
         label: 'Close pane',
+        shortcut: 'Ctrl+Shift+X',
         onActivate: () => {
-          void closePane(paneId);
+          void (async () => {
+            const result = await closePane(paneId);
+            if (result.wouldCloseWindow) await requestWindowClose();
+          })();
         },
       },
     ],
-    [paneId, sessionId, hasSelection, clearScrollback, restartSession, closePane],
+    [paneId, sessionId, hasSelection, clearScrollback, restartSession, closePane, splitFocusedPane],
   );
 
-  const firstEnabledIndex = items.findIndex((i) => !i.disabled);
+  const firstEnabledIndex = items.findIndex(
+    (i) => i.kind === 'item' && !i.disabled,
+  );
   const [highlight, setHighlight] = useState<number>(
     firstEnabledIndex === -1 ? 0 : firstEnabledIndex,
   );
@@ -109,7 +153,7 @@ export function ContextMenu({
     for (let i = 0; i < n; i++) {
       next = (next + delta + n) % n;
       const item = items[next];
-      if (item && !item.disabled) {
+      if (item && item.kind === 'item' && !item.disabled) {
         setHighlight(next);
         return;
       }
@@ -118,7 +162,7 @@ export function ContextMenu({
 
   const activate = (index: number): void => {
     const item = items[index];
-    if (!item || item.disabled) return;
+    if (!item || item.kind !== 'item' || item.disabled) return;
     onClose();
     item.onActivate();
   };
@@ -151,7 +195,11 @@ export function ContextMenu({
     e.stopPropagation();
   };
 
-  const menuHeight = items.length * ITEM_HEIGHT + VERTICAL_PADDING * 2;
+  const menuHeight =
+    items.reduce(
+      (acc, i) => acc + (i.kind === 'separator' ? SEPARATOR_HEIGHT : ITEM_HEIGHT),
+      0,
+    ) + VERTICAL_PADDING * 2;
   const maxX = window.innerWidth - MENU_WIDTH - 4;
   const maxY = window.innerHeight - menuHeight - 4;
   const left = Math.max(4, Math.min(position.x, maxX));
@@ -168,6 +216,16 @@ export function ContextMenu({
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((item, index) => {
+        if (item.kind === 'separator') {
+          return (
+            <li
+              key={`sep-${index}`}
+              role="separator"
+              className="pane__context-menu-sep"
+              aria-hidden="true"
+            />
+          );
+        }
         const className = [
           'pane__context-menu-item',
           item.disabled ? 'pane__context-menu-item--disabled' : '',
@@ -179,7 +237,7 @@ export function ContextMenu({
           .join(' ');
         return (
           <li
-            key={item.label}
+            key={`item-${index}-${item.label}`}
             role="menuitem"
             aria-disabled={item.disabled || undefined}
             className={className}
@@ -191,7 +249,10 @@ export function ContextMenu({
               activate(index);
             }}
           >
-            {item.label}
+            <span className="pane__context-menu-label">{item.label}</span>
+            {item.shortcut && (
+              <span className="pane__context-menu-shortcut">{item.shortcut}</span>
+            )}
           </li>
         );
       })}
