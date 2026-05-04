@@ -20,6 +20,8 @@
   "build": {
     "appId": "com.local.terminal-workspace",
     "productName": "Terminal Workspace",
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
     "directories": {
       "output": "dist"
     },
