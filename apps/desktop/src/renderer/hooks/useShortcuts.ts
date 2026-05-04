@@ -200,6 +200,11 @@ export function useShortcuts(): void {
           e.preventDefault();
           void pasteIntoPane(activePaneId);
           return;
+        case 'K':
+        case 'k':
+          e.preventDefault();
+          window.dispatchEvent(new Event('commandsPicker:open'));
+          return;
         case 'Enter':
           e.preventDefault();
           if (focusedSessionId) void store.restartSession(focusedSessionId);

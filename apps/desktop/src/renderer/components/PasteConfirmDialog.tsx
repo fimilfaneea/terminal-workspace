@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useWorkspaceStore } from '@renderer/state/workspaceStore';
+import { stripTrailingNewline } from '@renderer/lib/clipboard';
 
 export function PasteConfirmDialog(): JSX.Element | null {
   const request = useWorkspaceStore((s) => s.pasteConfirmRequest);
@@ -19,7 +20,7 @@ export function PasteConfirmDialog(): JSX.Element | null {
   };
 
   const onConfirm = (): void => {
-    window.terminal.write(request.sessionId, request.text);
+    window.terminal.write(request.sessionId, stripTrailingNewline(request.text));
     dismiss();
   };
 

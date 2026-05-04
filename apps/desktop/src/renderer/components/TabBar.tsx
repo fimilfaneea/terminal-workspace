@@ -8,6 +8,8 @@ import { usePersistedCwdPresets } from '@renderer/hooks/usePersistedCwdPresets';
 import { Menu, type MenuEntry } from './Menu';
 import { ManagePresetsDialog } from './ManagePresetsDialog';
 import { RenamableTitle, type RenamableTitleHandle } from './RenamableTitle';
+import { SavedCommandsButton } from './SavedCommandsButton';
+import { FontSizeWidget } from './FontSizeWidget';
 
 const DRAG_MIME = 'application/x-tab-index';
 
@@ -316,6 +318,8 @@ export function TabBar(): JSX.Element {
             {basenameOf(effectiveCwd)}
           </span>
         )}
+        <SavedCommandsButton />
+        <FontSizeWidget />
       </div>
       {newTabMenu && (
         <Menu

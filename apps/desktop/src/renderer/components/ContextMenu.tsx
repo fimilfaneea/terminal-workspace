@@ -40,6 +40,8 @@ export function ContextMenu({
   const restartSession = useWorkspaceStore((s) => s.restartSession);
   const closePane = useWorkspaceStore((s) => s.closePane);
   const splitFocusedPane = useWorkspaceStore((s) => s.splitFocusedPane);
+  const bumpFontSize = useWorkspaceStore((s) => s.bumpFontSize);
+  const resetFontSize = useWorkspaceStore((s) => s.resetFontSize);
   const requestWindowClose = (): Promise<void> => window.shell.requestWindowClose();
 
   const items: Item[] = useMemo(
@@ -94,6 +96,32 @@ export function ContextMenu({
           void clearScrollback(sessionId);
         },
       },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: 'Increase font size',
+        shortcut: 'Ctrl+=',
+        onActivate: () => {
+          bumpFontSize(1);
+        },
+      },
+      {
+        kind: 'item',
+        label: 'Decrease font size',
+        shortcut: 'Ctrl+-',
+        onActivate: () => {
+          bumpFontSize(-1);
+        },
+      },
+      {
+        kind: 'item',
+        label: 'Reset font size',
+        shortcut: 'Ctrl+0',
+        onActivate: () => {
+          resetFontSize();
+        },
+      },
+      { kind: 'separator' },
       {
         kind: 'item',
         label: 'Rename pane',
@@ -123,7 +151,7 @@ export function ContextMenu({
         },
       },
     ],
-    [paneId, sessionId, hasSelection, clearScrollback, restartSession, closePane, splitFocusedPane],
+    [paneId, sessionId, hasSelection, clearScrollback, restartSession, closePane, splitFocusedPane, bumpFontSize, resetFontSize],
   );
 
   const firstEnabledIndex = items.findIndex(
