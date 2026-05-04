@@ -94,6 +94,22 @@ export function TerminalPane({
     term.open(containerEl);
     fit.fit();
 
+    // Browser-style Ctrl+C/V: when there is a selection, suppress xterm's
+    // SIGINT so useShortcuts can copy. Always suppress xterm's Ctrl+V handling
+    // so useShortcuts owns paste (avoids double-paste).
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown') return true;
+      if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return true;
+      const k = e.key;
+      if (k === 'c' || k === 'C') {
+        return term.getSelection().length === 0;
+      }
+      if (k === 'v' || k === 'V') {
+        return false;
+      }
+      return true;
+    });
+
     termRef.current = term;
     fitRef.current = fit;
     searchRef.current = search;

@@ -3,12 +3,14 @@ import { PasteConfirmDialog } from './components/PasteConfirmDialog';
 import { SplitTree } from './components/SplitTree';
 import { TabBar } from './components/TabBar';
 import { usePersistedFontSize } from './hooks/usePersistedFontSize';
+import { usePersistedLastCwd } from './hooks/usePersistedLastCwd';
 import { useShortcuts } from './hooks/useShortcuts';
 import { useTerminalEvents } from './hooks/useTerminalEvents';
 import { useWorkspaceStore } from './state/workspaceStore';
 
 export function App(): JSX.Element {
   usePersistedFontSize();
+  usePersistedLastCwd();
   useTerminalEvents();
   useShortcuts();
 

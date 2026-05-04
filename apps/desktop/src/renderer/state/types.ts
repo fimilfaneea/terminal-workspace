@@ -8,8 +8,9 @@ export type PaneNode =
       type: 'split';
       id: string;
       direction: SplitDirection;
-      ratio: number;
-      children: [PaneNode, PaneNode];
+      children: PaneNode[];
+      ratios: number[];
+      userResized: boolean;
     };
 
 export type SplitPaneNode = Extract<PaneNode, { type: 'split' }>;
@@ -43,6 +44,7 @@ export interface WorkspaceState {
   fontSizePx: number;
   bootstrapping: boolean;
   pasteConfirmRequest: PasteConfirmRequest | null;
+  lastCwd: string | null;
 }
 
 export interface CloseResult {
@@ -63,7 +65,7 @@ export interface WorkspaceActions {
   setActivePane: (tabId: string, paneId: string) => void;
   focusNextPane: () => void;
   focusPrevPane: () => void;
-  setSplitRatio: (tabId: string, splitNodeId: string, ratio: number) => void;
+  setSplitRatios: (tabId: string, splitNodeId: string, ratios: number[]) => void;
 
   renameSession: (sessionId: string, title: string) => Promise<void>;
   restartSession: (sessionId: string) => Promise<void>;
@@ -77,6 +79,8 @@ export interface WorkspaceActions {
 
   requestPasteConfirm: (req: PasteConfirmRequest) => void;
   dismissPasteConfirm: () => void;
+
+  setLastCwd: (path: string | null) => void;
 }
 
 export type WorkspaceStore = WorkspaceState & WorkspaceActions;

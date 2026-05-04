@@ -6,7 +6,19 @@ import type {
   SplitPaneNode,
 } from '@renderer/state/types';
 
-const DEFAULT_RATIO = 0.5;
+const MIN_RATIO = 0.05;
+
+function equalRatios(n: number): number[] {
+  return Array<number>(n).fill(1 / n);
+}
+
+function clampAndNormalize(ratios: number[]): number[] {
+  if (ratios.length === 0) return ratios;
+  const clamped = ratios.map((r) => (Number.isFinite(r) ? Math.max(MIN_RATIO, r) : MIN_RATIO));
+  const sum = clamped.reduce((a, b) => a + b, 0);
+  if (sum === 0) return equalRatios(clamped.length);
+  return clamped.map((r) => r / sum);
+}
 
 export function createLeaf(sessionId: string): LeafPaneNode {
   return { type: 'leaf', id: newPaneId(), sessionId };
@@ -14,26 +26,32 @@ export function createLeaf(sessionId: string): LeafPaneNode {
 
 export function findLeaf(root: PaneNode, paneId: string): LeafPaneNode | null {
   if (root.type === 'leaf') return root.id === paneId ? root : null;
-  return findLeaf(root.children[0], paneId) ?? findLeaf(root.children[1], paneId);
+  for (const child of root.children) {
+    const found = findLeaf(child, paneId);
+    if (found) return found;
+  }
+  return null;
 }
 
 export function findParentSplit(
   root: PaneNode,
   paneId: string,
-): { parent: SplitPaneNode; index: 0 | 1 } | null {
+): { parent: SplitPaneNode; index: number } | null {
   if (root.type === 'leaf') return null;
-  if (root.children[0].id === paneId) return { parent: root, index: 0 };
-  if (root.children[1].id === paneId) return { parent: root, index: 1 };
-  return (
-    findParentSplit(root.children[0], paneId) ??
-    findParentSplit(root.children[1], paneId)
-  );
+  const idx = root.children.findIndex((c) => c.id === paneId);
+  if (idx !== -1) return { parent: root, index: idx };
+  for (const child of root.children) {
+    const found = findParentSplit(child, paneId);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
- * Replaces the leaf identified by `paneId` with a split node whose first
- * child is the original leaf and whose second child is `newPane`. Pure: caller
- * mints `newPane` (typically via `createLeaf`) so this helper has no randomness.
+ * Replaces the leaf identified by `paneId` with the result of inserting
+ * `newPane` next to it in `direction`. Same-direction parents flatten (the new
+ * pane joins as a sibling and ratios reset to equal); otherwise the leaf is
+ * wrapped in a fresh 2-child split.
  */
 export function splitLeaf(
   root: PaneNode,
@@ -41,22 +59,76 @@ export function splitLeaf(
   direction: SplitDirection,
   newPane: LeafPaneNode,
 ): PaneNode {
+  // Case: leaf is the root.
   if (root.type === 'leaf') {
     if (root.id !== paneId) return root;
     return {
       type: 'split',
       id: newPaneId(),
       direction,
-      ratio: DEFAULT_RATIO,
       children: [root, newPane],
+      ratios: equalRatios(2),
+      userResized: false,
     };
   }
-  const [a, b] = root.children;
-  const left = splitLeaf(a, paneId, direction, newPane);
-  if (left !== a) return { ...root, children: [left, b] };
-  const right = splitLeaf(b, paneId, direction, newPane);
-  if (right !== b) return { ...root, children: [a, right] };
-  return root;
+  // Same-direction parent that directly contains the leaf: flatten.
+  if (root.direction === direction) {
+    const idx = root.children.findIndex((c) => c.id === paneId);
+    if (idx !== -1) {
+      const nextChildren = [...root.children];
+      nextChildren.splice(idx + 1, 0, newPane);
+      const nextRatios = root.userResized
+        ? splitRatioInPlace(root.ratios, idx)
+        : equalRatios(nextChildren.length);
+      return {
+        ...root,
+        children: nextChildren,
+        ratios: nextRatios,
+      };
+    }
+  } else {
+    // Different-direction parent: if the leaf is a direct child, replace it
+    // in place with a fresh perpendicular split.
+    const idx = root.children.findIndex((c) => c.id === paneId);
+    if (idx !== -1) {
+      const child = root.children[idx];
+      if (child && child.type === 'leaf') {
+        const wrapper: SplitPaneNode = {
+          type: 'split',
+          id: newPaneId(),
+          direction,
+          children: [child, newPane],
+          ratios: equalRatios(2),
+          userResized: false,
+        };
+        const nextChildren = [...root.children];
+        nextChildren[idx] = wrapper;
+        return { ...root, children: nextChildren };
+      }
+    }
+  }
+  // Recurse into children.
+  let changed = false;
+  const nextChildren = root.children.map((c) => {
+    const next = splitLeaf(c, paneId, direction, newPane);
+    if (next !== c) changed = true;
+    return next;
+  });
+  return changed ? { ...root, children: nextChildren } : root;
+}
+
+/**
+ * When a user-resized group gets a new sibling, halve the ratio at `idx`
+ * and give the new entry the other half so the visual size of unaffected
+ * panes is preserved.
+ */
+function splitRatioInPlace(ratios: number[], idx: number): number[] {
+  const out = [...ratios];
+  const original = out[idx] ?? 1 / (ratios.length + 1);
+  const half = original / 2;
+  out[idx] = half;
+  out.splice(idx + 1, 0, half);
+  return clampAndNormalize(out);
 }
 
 export function removeLeaf(
@@ -69,19 +141,62 @@ export function removeLeaf(
     }
     return { newRoot: root, orphanedSessionIds: [] };
   }
-  const [a, b] = root.children;
-  const left = removeLeaf(a, paneId);
-  if (left.orphanedSessionIds.length > 0) {
-    return {
-      newRoot: left.newRoot === null ? b : { ...root, children: [left.newRoot, b] },
-      orphanedSessionIds: left.orphanedSessionIds,
-    };
+  // Direct removal of a child leaf.
+  const directIdx = root.children.findIndex((c) => c.id === paneId);
+  if (directIdx !== -1) {
+    const removed = root.children[directIdx];
+    if (removed && removed.type === 'leaf') {
+      const remaining = root.children.filter((_, i) => i !== directIdx);
+      const removedRatio = root.ratios[directIdx] ?? 0;
+      if (remaining.length === 1) {
+        const sole = remaining[0];
+        return { newRoot: sole ?? null, orphanedSessionIds: [removed.sessionId] };
+      }
+      const remainingRatios = root.ratios.filter((_, i) => i !== directIdx);
+      const nextRatios = root.userResized
+        ? clampAndNormalize(remainingRatios.map((r) => r + removedRatio / remaining.length))
+        : equalRatios(remaining.length);
+      return {
+        newRoot: { ...root, children: remaining, ratios: nextRatios },
+        orphanedSessionIds: [removed.sessionId],
+      };
+    }
   }
-  const right = removeLeaf(b, paneId);
-  if (right.orphanedSessionIds.length > 0) {
+  // Recurse.
+  for (let i = 0; i < root.children.length; i++) {
+    const child = root.children[i];
+    if (!child) continue;
+    const result = removeLeaf(child, paneId);
+    if (result.orphanedSessionIds.length === 0) continue;
+    let nextChildren: PaneNode[];
+    if (result.newRoot === null) {
+      nextChildren = root.children.filter((_, j) => j !== i);
+    } else {
+      nextChildren = root.children.map((c, j) => (j === i ? result.newRoot! : c));
+    }
+    if (nextChildren.length === 0) {
+      return { newRoot: null, orphanedSessionIds: result.orphanedSessionIds };
+    }
+    if (nextChildren.length === 1) {
+      const sole = nextChildren[0];
+      return {
+        newRoot: sole ?? null,
+        orphanedSessionIds: result.orphanedSessionIds,
+      };
+    }
+    let nextRatios: number[];
+    if (result.newRoot === null) {
+      const removedRatio = root.ratios[i] ?? 0;
+      const remainingRatios = root.ratios.filter((_, j) => j !== i);
+      nextRatios = root.userResized
+        ? clampAndNormalize(remainingRatios.map((r) => r + removedRatio / nextChildren.length))
+        : equalRatios(nextChildren.length);
+    } else {
+      nextRatios = root.ratios;
+    }
     return {
-      newRoot: right.newRoot === null ? a : { ...root, children: [a, right.newRoot] },
-      orphanedSessionIds: right.orphanedSessionIds,
+      newRoot: { ...root, children: nextChildren, ratios: nextRatios },
+      orphanedSessionIds: result.orphanedSessionIds,
     };
   }
   return { newRoot: root, orphanedSessionIds: [] };
@@ -89,15 +204,16 @@ export function removeLeaf(
 
 export function collectLeafIds(root: PaneNode): string[] {
   if (root.type === 'leaf') return [root.id];
-  return [...collectLeafIds(root.children[0]), ...collectLeafIds(root.children[1])];
+  const out: string[] = [];
+  for (const child of root.children) out.push(...collectLeafIds(child));
+  return out;
 }
 
 export function collectSessionIds(root: PaneNode): string[] {
   if (root.type === 'leaf') return [root.sessionId];
-  return [
-    ...collectSessionIds(root.children[0]),
-    ...collectSessionIds(root.children[1]),
-  ];
+  const out: string[] = [];
+  for (const child of root.children) out.push(...collectSessionIds(child));
+  return out;
 }
 
 export function focusNext(root: PaneNode, currentPaneId: string): string {
@@ -116,24 +232,29 @@ export function focusPrev(root: PaneNode, currentPaneId: string): string {
   return leaves[(idx - 1 + leaves.length) % leaves.length] ?? currentPaneId;
 }
 
-const MIN_RATIO = 0.05;
-const MAX_RATIO = 0.95;
-
-export function updateSplitRatio(
+export function updateSplitRatios(
   root: PaneNode,
   splitNodeId: string,
-  ratio: number,
+  ratios: number[],
 ): PaneNode {
   if (root.type === 'leaf') return root;
-  const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio));
   if (root.id === splitNodeId) {
-    if (root.ratio === clamped) return root;
-    return { ...root, ratio: clamped };
+    if (ratios.length !== root.children.length) return root;
+    const next = clampAndNormalize(ratios);
+    if (
+      next.length === root.ratios.length &&
+      next.every((r, i) => Math.abs(r - (root.ratios[i] ?? 0)) < 1e-6) &&
+      root.userResized
+    ) {
+      return root;
+    }
+    return { ...root, ratios: next, userResized: true };
   }
-  const [a, b] = root.children;
-  const left = updateSplitRatio(a, splitNodeId, ratio);
-  if (left !== a) return { ...root, children: [left, b] };
-  const right = updateSplitRatio(b, splitNodeId, ratio);
-  if (right !== b) return { ...root, children: [a, right] };
-  return root;
+  let changed = false;
+  const nextChildren = root.children.map((c) => {
+    const n = updateSplitRatios(c, splitNodeId, ratios);
+    if (n !== c) changed = true;
+    return n;
+  });
+  return changed ? { ...root, children: nextChildren } : root;
 }

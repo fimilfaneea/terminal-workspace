@@ -166,3 +166,24 @@
   background: #1f1f1f;
   color: #ffffff;
 }
+
+.tab-bar__new-cwd {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #9da5b4;
+  background: #1f1f1f;
+  border-radius: 3px;
+  cursor: pointer;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-bar__new-cwd:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+}

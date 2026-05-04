@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
+  CWD_PRESETS_STORAGE_KEY,
   DEFAULT_FONT_SIZE_PX,
+  LAST_CWD_STORAGE_KEY,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
 } from '@shared/constants';
@@ -15,7 +17,7 @@ import {
   focusPrev,
   removeLeaf,
   splitLeaf,
-  updateSplitRatio,
+  updateSplitRatios,
 } from '@renderer/lib/splitTree';
 import type {
   CloseResult,
@@ -42,6 +44,23 @@ function totalPaneCount(tabs: Tab[]): number {
   let n = 0;
   for (const tab of tabs) n += collectLeafIds(tab.rootPane).length;
   return n;
+}
+
+function findPaneIdForSession(tabs: Tab[], sessionId: string): string | null {
+  for (const tab of tabs) {
+    const found = findPaneIdInNode(tab.rootPane, sessionId);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function findPaneIdInNode(node: PaneNode, sessionId: string): string | null {
+  if (node.type === 'leaf') return node.sessionId === sessionId ? node.id : null;
+  for (const child of node.children) {
+    const found = findPaneIdInNode(child, sessionId);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 function findTabIndexContainingSession(tabs: Tab[], sessionId: string): number {
@@ -78,6 +97,40 @@ function makeCreatePayload(cwd: string | undefined): {
     : { cols: INITIAL_COLS, rows: INITIAL_ROWS };
 }
 
+function readPersistedLastCwd(): string | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_CWD_STORAGE_KEY);
+    if (raw === null || raw.length === 0) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function readFirstPersistedPreset(): string | null {
+  try {
+    const raw = window.localStorage.getItem(CWD_PRESETS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    for (const entry of parsed) {
+      if (entry && typeof entry === 'object') {
+        const path = (entry as { path?: unknown }).path;
+        if (typeof path === 'string' && path.length > 0) return path;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDefaultCwd(state: WorkspaceState): string | undefined {
+  if (state.lastCwd && state.lastCwd.length > 0) return state.lastCwd;
+  const preset = readFirstPersistedPreset();
+  return preset ?? undefined;
+}
+
 const initialState: WorkspaceState = {
   tabs: [],
   activeTabId: '',
@@ -85,6 +138,7 @@ const initialState: WorkspaceState = {
   fontSizePx: DEFAULT_FONT_SIZE_PX,
   bootstrapping: false,
   pasteConfirmRequest: null,
+  lastCwd: readPersistedLastCwd(),
 };
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -97,7 +151,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (state.bootstrapping || state.tabs.length > 0) return;
     set({ bootstrapping: true });
     try {
-      const info = await window.terminal.create(makeCreatePayload(undefined));
+      const info = await window.terminal.create(
+        makeCreatePayload(resolveDefaultCwd(state)),
+      );
       const tab = makeTabFromSession(info.id);
       set((s) => ({
         tabs: [...s.tabs, tab],
@@ -114,7 +170,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   // --- tabs --------------------------------------------------------------
 
   newTab: async (cwd?: string) => {
-    const info = await window.terminal.create(makeCreatePayload(cwd));
+    const effective =
+      cwd && cwd.length > 0 ? cwd : resolveDefaultCwd(get());
+    const info = await window.terminal.create(makeCreatePayload(effective));
     const tab = makeTabFromSession(info.id);
     set((s) => ({
       tabs: [...s.tabs, tab],
@@ -194,7 +252,19 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const tab = state.tabs.find((t) => t.id === state.activeTabId);
     if (!tab) return;
     const focusedPaneId = tab.activePaneId;
-    const info = await window.terminal.create(makeCreatePayload(cwd));
+    let effectiveCwd = cwd && cwd.length > 0 ? cwd : undefined;
+    if (!effectiveCwd) {
+      const focusedLeaf = findLeaf(tab.rootPane, focusedPaneId);
+      if (focusedLeaf) {
+        const focusedSessionCwd =
+          state.sessionsById[focusedLeaf.sessionId]?.info.cwd;
+        if (focusedSessionCwd && focusedSessionCwd.length > 0) {
+          effectiveCwd = focusedSessionCwd;
+        }
+      }
+      if (!effectiveCwd) effectiveCwd = resolveDefaultCwd(state);
+    }
+    const info = await window.terminal.create(makeCreatePayload(effectiveCwd));
     const newPane = createLeaf(info.id);
     const newRoot = splitLeaf(tab.rootPane, focusedPaneId, direction, newPane);
     set((s) => ({
@@ -286,11 +356,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     });
   },
 
-  setSplitRatio: (tabId: string, splitNodeId: string, ratio: number) => {
+  setSplitRatios: (tabId: string, splitNodeId: string, ratios: number[]) => {
     set((s) => {
       const tab = s.tabs.find((t) => t.id === tabId);
       if (!tab) return s;
-      const nextRoot = updateSplitRatio(tab.rootPane, splitNodeId, ratio);
+      const nextRoot = updateSplitRatios(tab.rootPane, splitNodeId, ratios);
       if (nextRoot === tab.rootPane) return s;
       return {
         tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, rootPane: nextRoot } : t)),
@@ -316,6 +386,19 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   applyTerminalEvent: (evt: TerminalEvent) => {
     set((s) => applyEvent(s, evt));
+    if (evt.kind === 'exited') {
+      const paneId = findPaneIdForSession(get().tabs, evt.sessionId);
+      if (paneId !== null) {
+        queueMicrotask(() => {
+          void (async () => {
+            const result = await get().closePane(paneId);
+            if (result.wouldCloseWindow) {
+              await window.shell.requestWindowClose();
+            }
+          })();
+        });
+      }
+    }
   },
 
   // --- font --------------------------------------------------------------
@@ -340,6 +423,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   dismissPasteConfirm: () => {
     set({ pasteConfirmRequest: null });
+  },
+
+  setLastCwd: (path: string | null) => {
+    set({ lastCwd: path && path.length > 0 ? path : null });
   },
 }));
 

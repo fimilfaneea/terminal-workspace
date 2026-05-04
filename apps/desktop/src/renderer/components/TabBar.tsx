@@ -1,20 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   selectTabTitle,
   useWorkspaceStore,
 } from '@renderer/state/workspaceStore';
 import type { Tab } from '@renderer/state/types';
-import type { DefaultCwds } from '@shared/types';
-import {
-  builtInPresets,
-  type CwdPreset,
-} from '@renderer/lib/cwdPresets';
 import { usePersistedCwdPresets } from '@renderer/hooks/usePersistedCwdPresets';
 import { Menu, type MenuEntry } from './Menu';
 import { ManagePresetsDialog } from './ManagePresetsDialog';
 import { RenamableTitle, type RenamableTitleHandle } from './RenamableTitle';
 
 const DRAG_MIME = 'application/x-tab-index';
+
+function basenameOf(path: string): string {
+  const cleaned = path.replace(/[\\/]+$/u, '');
+  const idx = Math.max(cleaned.lastIndexOf('\\'), cleaned.lastIndexOf('/'));
+  return idx === -1 ? cleaned : cleaned.slice(idx + 1) || cleaned;
+}
 
 interface DropState {
   index: number;
@@ -34,19 +35,15 @@ export function TabBar(): JSX.Element {
   const dragFromRef = useRef<number | null>(null);
   const [dropState, setDropState] = useState<DropState | null>(null);
 
-  // Default cwd values from main; lazy-loaded.
-  const [defaultCwds, setDefaultCwds] = useState<DefaultCwds | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void window.shell.getDefaultCwds().then((d) => {
-      if (!cancelled) setDefaultCwds(d);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const userPresets = usePersistedCwdPresets();
+  const lastCwd = useWorkspaceStore((s) => s.lastCwd);
+  const setLastCwd = useWorkspaceStore((s) => s.setLastCwd);
+  const effectiveCwd: string | null =
+    lastCwd ?? userPresets.presets[0]?.path ?? null;
+  const [splitInMenu, setSplitInMenu] = useState<{
+    direction: 'horizontal' | 'vertical';
+    position: { x: number; y: number };
+  } | null>(null);
   const [newTabMenu, setNewTabMenu] = useState<{ x: number; y: number } | null>(null);
   const [tabContextMenu, setTabContextMenu] = useState<{
     tabId: string;
@@ -109,26 +106,17 @@ export function TabBar(): JSX.Element {
   };
 
   const newTabAt = (cwd: string | undefined): void => {
+    if (cwd && cwd.length > 0) setLastCwd(cwd);
     void newTab(cwd);
   };
 
-  const builtIns: CwdPreset[] = builtInPresets(defaultCwds);
-
   const newTabMenuEntries: MenuEntry[] = [
-    ...builtIns.map<MenuEntry>((p) => ({
-      kind: 'item',
-      label: p.label,
-      onActivate: () => newTabAt(p.path),
-    })),
-    ...(userPresets.presets.length > 0 && builtIns.length > 0
-      ? ([{ kind: 'separator' }] satisfies MenuEntry[])
-      : []),
     ...userPresets.presets.map<MenuEntry>((p) => ({
       kind: 'item',
       label: p.label,
       onActivate: () => newTabAt(p.path),
     })),
-    ...((builtIns.length > 0 || userPresets.presets.length > 0)
+    ...(userPresets.presets.length > 0
       ? ([{ kind: 'separator' }] satisfies MenuEntry[])
       : []),
     {
@@ -148,7 +136,45 @@ export function TabBar(): JSX.Element {
     },
   ];
 
-  const tabContextMenuEntries = (tab: Tab): MenuEntry[] => {
+  const splitAt = (
+    direction: 'horizontal' | 'vertical',
+    cwd: string,
+  ): void => {
+    if (cwd && cwd.length > 0) setLastCwd(cwd);
+    void splitFocusedPane(direction, cwd);
+  };
+
+  const splitInMenuEntries = (
+    direction: 'horizontal' | 'vertical',
+  ): MenuEntry[] => {
+    const entries: MenuEntry[] = [];
+    for (const p of userPresets.presets) {
+      entries.push({
+        kind: 'item',
+        label: p.label,
+        onActivate: () => splitAt(direction, p.path),
+      });
+    }
+    if (userPresets.presets.length > 0) {
+      entries.push({ kind: 'separator' });
+    }
+    entries.push({
+      kind: 'item',
+      label: 'Choose folder…',
+      onActivate: () => {
+        void (async () => {
+          const path = await window.shell.pickFolder();
+          if (path) splitAt(direction, path);
+        })();
+      },
+    });
+    return entries;
+  };
+
+  const tabContextMenuEntries = (
+    tab: Tab,
+    contextPosition: { x: number; y: number },
+  ): MenuEntry[] => {
     const isActive = tab.id === activeTabId;
     return [
       {
@@ -174,11 +200,27 @@ export function TabBar(): JSX.Element {
       },
       {
         kind: 'item',
+        label: 'Split right in…',
+        disabled: !isActive,
+        onActivate: () => {
+          setSplitInMenu({ direction: 'horizontal', position: contextPosition });
+        },
+      },
+      {
+        kind: 'item',
         label: 'Split down',
         shortcut: 'Ctrl+Shift+O',
         disabled: !isActive,
         onActivate: () => {
           void splitFocusedPane('vertical');
+        },
+      },
+      {
+        kind: 'item',
+        label: 'Split down in…',
+        disabled: !isActive,
+        onActivate: () => {
+          setSplitInMenu({ direction: 'vertical', position: contextPosition });
         },
       },
       { kind: 'separator' },
@@ -244,8 +286,12 @@ export function TabBar(): JSX.Element {
           ref={newTabBtnRef}
           className="tab-bar__new"
           type="button"
-          title="New tab (Ctrl+T)"
-          onClick={() => newTabAt(undefined)}
+          title={
+            effectiveCwd
+              ? `New tab in ${effectiveCwd} (Ctrl+T)`
+              : 'New tab (Ctrl+T)'
+          }
+          onClick={() => newTabAt(effectiveCwd ?? undefined)}
           onContextMenu={(e) => {
             e.preventDefault();
             openNewTabMenu();
@@ -261,6 +307,15 @@ export function TabBar(): JSX.Element {
         >
           ▾
         </button>
+        {effectiveCwd && (
+          <span
+            className="tab-bar__new-cwd"
+            title={effectiveCwd}
+            onClick={openNewTabMenu}
+          >
+            {basenameOf(effectiveCwd)}
+          </span>
+        )}
       </div>
       {newTabMenu && (
         <Menu
@@ -275,13 +330,21 @@ export function TabBar(): JSX.Element {
         if (!tab) return null;
         return (
           <Menu
-            entries={tabContextMenuEntries(tab)}
+            entries={tabContextMenuEntries(tab, tabContextMenu.position)}
             position={tabContextMenu.position}
             onClose={() => setTabContextMenu(null)}
             width={220}
           />
         );
       })()}
+      {splitInMenu && (
+        <Menu
+          entries={splitInMenuEntries(splitInMenu.direction)}
+          position={splitInMenu.position}
+          onClose={() => setSplitInMenu(null)}
+          width={240}
+        />
+      )}
       {showManageDialog && (
         <ManagePresetsDialog
           presets={userPresets.presets}
@@ -328,10 +391,6 @@ function TabItem({
   const title = useWorkspaceStore((s) => selectTabTitle(s, tab.id));
   const fallback = `Terminal ${index + 1}`;
   const renameRef = useRef<RenamableTitleHandle | null>(null);
-
-  useEffect(() => {
-    return () => registerRenameHandle(null);
-  }, [registerRenameHandle]);
 
   const className = [
     'tab',
