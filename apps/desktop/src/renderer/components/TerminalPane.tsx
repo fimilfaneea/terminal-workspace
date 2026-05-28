@@ -41,6 +41,8 @@ export function TerminalPane({
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const renameRef = useRef<RenamableTitleHandle | null>(null);
+  const scrollbarRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
 
   const status = useWorkspaceStore(
     (s) => s.sessionsById[sessionId]?.info.status ?? 'starting',
@@ -99,6 +101,15 @@ export function TerminalPane({
     // so useShortcuts owns paste (avoids double-paste).
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true;
+      const noMods = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+      if (noMods && e.key === 'PageUp') {
+        term.scrollPages(-1);
+        return false;
+      }
+      if (noMods && e.key === 'PageDown') {
+        term.scrollPages(1);
+        return false;
+      }
       if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return true;
       const k = e.key;
       if (k === 'c' || k === 'C') {
@@ -114,10 +125,99 @@ export function TerminalPane({
     fitRef.current = fit;
     searchRef.current = search;
 
+    // Test hook: expose Terminal instance per sessionId so Playwright specs can
+    // query xterm's logical scroll state (buffer.active.viewportY etc.). Harmless
+    // in production — users would never poke at window globals.
+    const wForTest = window as unknown as { __terms?: Record<string, unknown> };
+    if (!wForTest.__terms) wForTest.__terms = {};
+    wForTest.__terms[sessionId] = term;
+
     const onDataDisposable = term.onData((data) => {
       if (statusRef.current !== 'running') return;
       window.terminal.write(sessionId, data);
     });
+
+    // Always-visible custom scrollbar overlay. xterm's canvas renderer doesn't
+    // keep real DOM overflow at rest, so Chromium hides the native scrollbar.
+    // We drive our own thumb off xterm's buffer state.
+    const updateScrollbar = (): void => {
+      const sb = scrollbarRef.current;
+      const th = thumbRef.current;
+      if (!sb || !th) return;
+      const buffer = term.buffer.active;
+      const total = buffer.length;
+      const visible = term.rows;
+      const sbHeight = sb.clientHeight;
+      if (sbHeight === 0) return;
+      if (total <= visible) {
+        // Buffer fits — render a faint full-height thumb so the user can still see the gutter.
+        th.style.height = `${sbHeight - 4}px`;
+        th.style.top = '2px';
+        th.style.opacity = '0.4';
+        return;
+      }
+      th.style.opacity = '1';
+      const ratio = visible / total;
+      const thumbHeight = Math.max(24, Math.floor(sbHeight * ratio));
+      const maxScrollable = total - visible;
+      const progress = maxScrollable === 0 ? 0 : buffer.viewportY / maxScrollable;
+      const thumbTop = Math.floor((sbHeight - thumbHeight) * progress);
+      th.style.height = `${thumbHeight}px`;
+      th.style.top = `${thumbTop}px`;
+    };
+
+    const onScrollDisposable = term.onScroll(() => updateScrollbar());
+    const onResizeDisposable = term.onResize(() => updateScrollbar());
+    const onWriteParsedDisposable = term.onWriteParsed(() => updateScrollbar());
+    // Initial render + a delayed pass after layout settles.
+    updateScrollbar();
+    const initialKick = window.setTimeout(updateScrollbar, 100);
+
+    const onThumbMouseDown = (e: MouseEvent): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sb = scrollbarRef.current;
+      const th = thumbRef.current;
+      if (!sb || !th) return;
+      const buffer = term.buffer.active;
+      const total = buffer.length;
+      const visible = term.rows;
+      const maxScrollable = Math.max(1, total - visible);
+      const sbHeight = sb.clientHeight;
+      const thumbHeight = th.offsetHeight;
+      const trackUsable = Math.max(1, sbHeight - thumbHeight);
+      const startThumbTop = parseFloat(th.style.top || '0') || 0;
+      const startMouseY = e.clientY;
+
+      const onMove = (mv: MouseEvent): void => {
+        const delta = mv.clientY - startMouseY;
+        const newTop = Math.max(0, Math.min(trackUsable, startThumbTop + delta));
+        const progress = newTop / trackUsable;
+        const targetLine = Math.round(progress * maxScrollable);
+        term.scrollToLine(targetLine);
+      };
+      const onUp = (): void => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    };
+
+    const onTrackMouseDown = (e: MouseEvent): void => {
+      if (e.target === thumbRef.current) return;
+      const sb = scrollbarRef.current;
+      const th = thumbRef.current;
+      if (!sb || !th) return;
+      const rect = sb.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const thumbTop = parseFloat(th.style.top || '0') || 0;
+      if (clickY < thumbTop) term.scrollPages(-1);
+      else term.scrollPages(1);
+    };
+
+    thumbRef.current?.addEventListener('mousedown', onThumbMouseDown);
+    scrollbarRef.current?.addEventListener('mousedown', onTrackMouseDown);
 
     let cancelled = false;
     let snapshotResolved = false;
@@ -199,10 +299,16 @@ export function TerminalPane({
     return () => {
       cancelled = true;
       if (debounceTimer !== null) clearTimeout(debounceTimer);
+      window.clearTimeout(initialKick);
       window.removeEventListener('resize', scheduleFit);
       resizeObserver.disconnect();
       eventUnsub();
       onDataDisposable.dispose();
+      onScrollDisposable.dispose();
+      onResizeDisposable.dispose();
+      onWriteParsedDisposable.dispose();
+      thumbRef.current?.removeEventListener('mousedown', onThumbMouseDown);
+      scrollbarRef.current?.removeEventListener('mousedown', onTrackMouseDown);
       links.dispose();
       search.dispose();
       fit.dispose?.();
@@ -303,6 +409,9 @@ export function TerminalPane({
         <div className="pane__error">{errorMessage}</div>
       )}
       <div className="pane__xterm" ref={containerRef} />
+      <div className="pane__scrollbar" ref={scrollbarRef}>
+        <div className="pane__scrollbar-thumb" ref={thumbRef} />
+      </div>
       {findBarOpen && searchRef.current && (
         <FindBar
           searchAddon={searchRef.current}

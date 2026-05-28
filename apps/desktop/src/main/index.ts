@@ -10,7 +10,10 @@ import { registerTerminalIpc } from './ipc/terminalIpc';
 import { registerWindowIpc } from './ipc/windowIpc';
 import { TerminalManager } from './terminal/TerminalManager';
 
-const gotLock = app.requestSingleInstanceLock();
+// Tests opt out of the single-instance lock so they can launch the app while
+// a real install is also running on the same machine.
+const TEST_MODE = process.env['TERMINAL_WORKSPACE_TEST'] === '1';
+const gotLock = TEST_MODE ? true : app.requestSingleInstanceLock();
 
 if (!gotLock) {
   app.quit();
@@ -51,6 +54,12 @@ if (!gotLock) {
 
   async function confirmAndQuit(win: BrowserWindow): Promise<void> {
     if (confirmedQuit) return;
+    if (TEST_MODE) {
+      confirmedQuit = true;
+      await proceedToQuit();
+      if (!win.isDestroyed()) win.destroy();
+      return;
+    }
     const count = terminalManager?.runningCount() ?? 0;
     const ok = await showCloseConfirm(win, count);
     if (!ok) return;

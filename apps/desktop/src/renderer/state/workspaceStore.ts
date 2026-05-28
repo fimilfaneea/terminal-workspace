@@ -151,14 +151,28 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (state.bootstrapping || state.tabs.length > 0) return;
     set({ bootstrapping: true });
     try {
-      const info = await window.terminal.create(
-        makeCreatePayload(resolveDefaultCwd(state)),
-      );
-      const tab = makeTabFromSession(info.id);
+      const payload = makeCreatePayload(resolveDefaultCwd(state));
+      const firstInfo = await window.terminal.create(payload);
+      const secondInfo = await window.terminal.create(payload);
+      const leftLeaf = createLeaf(firstInfo.id);
+      const rightLeaf = createLeaf(secondInfo.id);
+      const rootPane = splitLeaf(leftLeaf, leftLeaf.id, 'horizontal', rightLeaf);
+      const tab: Tab = {
+        id: newTabId(),
+        rootPane,
+        activePaneId: leftLeaf.id,
+        hasUnreadActivity: false,
+        hasError: false,
+        nameOverride: null,
+      };
       set((s) => ({
         tabs: [...s.tabs, tab],
         activeTabId: tab.id,
-        sessionsById: { ...s.sessionsById, [info.id]: makeSessionView(info) },
+        sessionsById: {
+          ...s.sessionsById,
+          [firstInfo.id]: makeSessionView(firstInfo),
+          [secondInfo.id]: makeSessionView(secondInfo),
+        },
         bootstrapping: false,
       }));
     } catch (err) {

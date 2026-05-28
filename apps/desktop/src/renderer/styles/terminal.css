@@ -70,32 +70,52 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  padding: 4px 0 0 4px;
+  padding: 4px 14px 0 4px;
   box-sizing: border-box;
 }
 
 .pane__xterm .xterm,
-.pane__xterm .xterm-viewport,
-.pane__xterm .xterm-screen {
+.pane__xterm .xterm-viewport {
   height: 100% !important;
   width: 100% !important;
 }
+.pane__xterm .xterm-screen {
+  height: 100% !important;
+}
 
+/* Hide xterm's native scrollbar — we render our own always-visible overlay. */
 .pane__xterm .xterm-viewport::-webkit-scrollbar {
-  width: 10px;
+  width: 0;
+  height: 0;
 }
-.pane__xterm .xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
+
+.pane__scrollbar {
+  position: absolute;
+  right: 0;
+  top: 22px;
+  bottom: 0;
+  width: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  user-select: none;
+  z-index: 5;
+  cursor: pointer;
 }
-.pane__xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #3a3d41;
-  border-radius: 5px;
-}
-.pane__xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+.pane__scrollbar-thumb {
+  position: absolute;
+  left: 2px;
+  right: 2px;
   background: #5a5d61;
+  border-radius: 5px;
+  min-height: 24px;
+  cursor: grab;
+  transition: background-color 120ms ease;
 }
-.pane__xterm .xterm-viewport::-webkit-scrollbar-thumb:active {
-  background: #6a6d71;
+.pane__scrollbar-thumb:hover {
+  background: #7a7d81;
+}
+.pane__scrollbar-thumb:active {
+  background: #9a9da1;
+  cursor: grabbing;
 }
 
 .split-root {
