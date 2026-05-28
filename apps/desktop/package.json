@@ -1,7 +1,7 @@
 {
   "name": "terminal-workspace",
   "productName": "Terminal Workspace",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Windows 11 Electron terminal workspace.",
   "license": "MIT",
   "author": "Fimil Faneea <fimil@americaninference.com>",

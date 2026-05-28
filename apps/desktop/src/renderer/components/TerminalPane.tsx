@@ -140,15 +140,24 @@ export function TerminalPane({
     // Always-visible custom scrollbar overlay. xterm's canvas renderer doesn't
     // keep real DOM overflow at rest, so Chromium hides the native scrollbar.
     // We drive our own thumb off xterm's buffer state.
-    const updateScrollbar = (): void => {
+    //
+    // Hot-path notes:
+    //  - `sb.clientHeight` is a layout-forcing read; cache it and refresh only
+    //    on resize (not on every scroll/write).
+    //  - Scroll/resize events can fire many times per frame under streaming
+    //    output; coalesce through requestAnimationFrame.
+    let sbHeight = 0;
+    const refreshSbHeight = (): void => {
       const sb = scrollbarRef.current;
+      sbHeight = sb ? sb.clientHeight : 0;
+    };
+    const updateScrollbar = (): void => {
       const th = thumbRef.current;
-      if (!sb || !th) return;
+      if (!th) return;
+      if (sbHeight === 0) return;
       const buffer = term.buffer.active;
       const total = buffer.length;
       const visible = term.rows;
-      const sbHeight = sb.clientHeight;
-      if (sbHeight === 0) return;
       if (total <= visible) {
         // Buffer fits — render a faint full-height thumb so the user can still see the gutter.
         th.style.height = `${sbHeight - 4}px`;
@@ -166,12 +175,28 @@ export function TerminalPane({
       th.style.top = `${thumbTop}px`;
     };
 
-    const onScrollDisposable = term.onScroll(() => updateScrollbar());
-    const onResizeDisposable = term.onResize(() => updateScrollbar());
-    const onWriteParsedDisposable = term.onWriteParsed(() => updateScrollbar());
+    let scrollbarRafId: number | null = null;
+    const requestScrollbarUpdate = (): void => {
+      if (scrollbarRafId !== null) return;
+      scrollbarRafId = requestAnimationFrame(() => {
+        scrollbarRafId = null;
+        updateScrollbar();
+      });
+    };
+    const requestScrollbarUpdateAfterResize = (): void => {
+      refreshSbHeight();
+      requestScrollbarUpdate();
+    };
+
+    const onScrollDisposable = term.onScroll(requestScrollbarUpdate);
+    const onResizeDisposable = term.onResize(requestScrollbarUpdateAfterResize);
     // Initial render + a delayed pass after layout settles.
+    refreshSbHeight();
     updateScrollbar();
-    const initialKick = window.setTimeout(updateScrollbar, 100);
+    const initialKick = window.setTimeout(() => {
+      refreshSbHeight();
+      updateScrollbar();
+    }, 100);
 
     const onThumbMouseDown = (e: MouseEvent): void => {
       e.preventDefault();
@@ -284,6 +309,10 @@ export function TerminalPane({
     const scheduleFit = (): void => {
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(runFit, RESIZE_DEBOUNCE_MS);
+      // Pane geometry is changing — refresh the cached scrollbar track height
+      // and repaint the thumb on the next frame.
+      refreshSbHeight();
+      requestScrollbarUpdate();
     };
 
     const resizeObserver = new ResizeObserver(scheduleFit);
@@ -300,13 +329,16 @@ export function TerminalPane({
       cancelled = true;
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       window.clearTimeout(initialKick);
+      if (scrollbarRafId !== null) {
+        cancelAnimationFrame(scrollbarRafId);
+        scrollbarRafId = null;
+      }
       window.removeEventListener('resize', scheduleFit);
       resizeObserver.disconnect();
       eventUnsub();
       onDataDisposable.dispose();
       onScrollDisposable.dispose();
       onResizeDisposable.dispose();
-      onWriteParsedDisposable.dispose();
       thumbRef.current?.removeEventListener('mousedown', onThumbMouseDown);
       scrollbarRef.current?.removeEventListener('mousedown', onTrackMouseDown);
       links.dispose();
@@ -314,6 +346,8 @@ export function TerminalPane({
       fit.dispose?.();
       canvas.dispose?.();
       term.dispose();
+      const wForTestCleanup = window as unknown as { __terms?: Record<string, unknown> };
+      if (wForTestCleanup.__terms) delete wForTestCleanup.__terms[sessionId];
       termRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
