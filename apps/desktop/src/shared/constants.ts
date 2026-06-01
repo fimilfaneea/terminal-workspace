@@ -18,6 +18,11 @@ export const IPC_TERMINAL_LIST = 'terminal:list';
 export const IPC_TERMINAL_SNAPSHOT = 'terminal:snapshot';
 export const IPC_TERMINAL_CLEAR_SCROLLBACK = 'terminal:clearScrollback';
 export const IPC_TERMINAL_EVENT = 'terminal:event';
+export const IPC_TERMINAL_SEARCH_HISTORY = 'terminal:searchHistory';
+export const IPC_TERMINAL_SEARCH_ALL_HISTORIES = 'terminal:searchAllHistories';
+
+export const MAX_SEARCH_MATCHES_PER_SESSION = 200;
+export const MAX_SEARCH_LINE_LENGTH = 240;
 
 export const IPC_SHELL_OPEN_EXTERNAL = 'shell:openExternal';
 export const IPC_SHELL_GET_DEFAULT_CWDS = 'shell:getDefaultCwds';

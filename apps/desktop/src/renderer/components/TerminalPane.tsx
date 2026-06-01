@@ -132,8 +132,45 @@ export function TerminalPane({
     if (!wForTest.__terms) wForTest.__terms = {};
     wForTest.__terms[sessionId] = term;
 
+    // Per-session input-line buffer. Each newline-terminated chunk becomes one
+    // command-history entry. In-memory only (CLAUDE.md: no new persistence).
+    let inputLineBuf = '';
+    const flushInputLine = (line: string): void => {
+      // Strip backspace runs the user typed before the newline (don't keep
+      // characters that were already erased visually). Naive O(n) pass.
+      let out = '';
+      for (let i = 0; i < line.length; i++) {
+        const ch = line.charCodeAt(i);
+        if (ch === 0x7f || ch === 0x08) {
+          if (out.length > 0) out = out.slice(0, -1);
+        } else {
+          out += line[i];
+        }
+      }
+      const store = useWorkspaceStore.getState();
+      store.appendCommandHistory(sessionId, out);
+    };
+    const captureInputLines = (data: string): void => {
+      for (let i = 0; i < data.length; i++) {
+        const ch = data.charCodeAt(i);
+        if (ch === 13 /* \r */ || ch === 10 /* \n */) {
+          if (inputLineBuf.length > 0) flushInputLine(inputLineBuf);
+          inputLineBuf = '';
+        } else if (ch === 0x03 /* Ctrl+C */ || ch === 0x04 /* Ctrl+D */) {
+          // Treat as line cancellation — drop the partial buffer rather than
+          // capturing the half-typed text.
+          inputLineBuf = '';
+        } else if (ch >= 0x20 || ch === 0x09 || ch === 0x7f || ch === 0x08) {
+          inputLineBuf += data[i];
+        }
+        // Everything else (ESC, arrow-key sequences, function keys) is ignored
+        // for history purposes — we only want what the user literally typed.
+      }
+    };
+
     const onDataDisposable = term.onData((data) => {
       if (statusRef.current !== 'running') return;
+      captureInputLines(data);
       window.terminal.write(sessionId, data);
     });
 
@@ -365,6 +402,22 @@ export function TerminalPane({
       closeFindBar: () => setFindBarOpen(false),
       startRename: () => renameRef.current?.startEditing(),
       focus: () => termRef.current?.focus(),
+      jumpToMatch: (snippet: string) => {
+        const sa = searchRef.current;
+        if (!sa || !snippet) return;
+        sa.findNext(snippet, {
+          caseSensitive: true,
+          regex: false,
+          decorations: {
+            matchBackground: '#3a3d41',
+            matchBorder: '#7a7d81',
+            matchOverviewRuler: '#e5e510',
+            activeMatchBackground: '#5a3d20',
+            activeMatchBorder: '#f5a623',
+            activeMatchColorOverviewRuler: '#f5a623',
+          },
+        });
+      },
     });
   }, [paneId, sessionId]);
 
@@ -446,9 +499,11 @@ export function TerminalPane({
       <div className="pane__scrollbar" ref={scrollbarRef}>
         <div className="pane__scrollbar-thumb" ref={thumbRef} />
       </div>
-      {findBarOpen && searchRef.current && (
+      {findBarOpen && searchRef.current && termRef.current && (
         <FindBar
+          term={termRef.current}
           searchAddon={searchRef.current}
+          sessionId={sessionId}
           onClose={() => setFindBarOpen(false)}
         />
       )}

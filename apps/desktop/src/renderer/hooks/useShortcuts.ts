@@ -17,6 +17,17 @@ export function useShortcuts(): void {
       const key = e.key;
       const store = useWorkspaceStore.getState();
 
+      // --- Ctrl+Alt shortcuts (deliberately distinct from plain Ctrl so we
+      // don't steal shell semantics like Ctrl+R = reverse-i-search). ---
+      if (e.altKey && !e.shiftKey) {
+        if (key === 'r' || key === 'R') {
+          e.preventDefault();
+          window.dispatchEvent(new Event('commandHistory:open'));
+          return;
+        }
+        return;
+      }
+
       // --- Ctrl-only (no Shift, no Alt) shortcuts ---
       if (!e.shiftKey && !e.altKey) {
         if (key === 'Tab') {
@@ -188,7 +199,7 @@ export function useShortcuts(): void {
         case 'F':
         case 'f':
           e.preventDefault();
-          getPaneHandle(activePaneId)?.openFindBar();
+          window.dispatchEvent(new Event('globalSearch:open'));
           return;
         case 'C':
         case 'c':

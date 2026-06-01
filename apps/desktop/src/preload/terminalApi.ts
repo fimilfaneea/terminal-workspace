@@ -8,11 +8,16 @@ import {
   IPC_TERMINAL_RENAME,
   IPC_TERMINAL_RESIZE,
   IPC_TERMINAL_RESTART,
+  IPC_TERMINAL_SEARCH_ALL_HISTORIES,
+  IPC_TERMINAL_SEARCH_HISTORY,
   IPC_TERMINAL_SNAPSHOT,
   IPC_TERMINAL_WRITE,
 } from '@shared/constants';
 import type {
+  AllSearchResults,
   CreateSessionOpts,
+  SearchOpts,
+  SearchResults,
   SessionInfo,
   Snapshot,
   TerminalEvent,
@@ -39,6 +44,10 @@ export const terminalApi = {
     callInvoke<Snapshot>(IPC_TERMINAL_SNAPSHOT, { sessionId }),
   clearScrollback: (sessionId: string): Promise<void> =>
     callInvoke<void>(IPC_TERMINAL_CLEAR_SCROLLBACK, { sessionId }),
+  searchHistory: (sessionId: string, query: string, opts: SearchOpts): Promise<SearchResults> =>
+    callInvoke<SearchResults>(IPC_TERMINAL_SEARCH_HISTORY, { sessionId, query, opts }),
+  searchAllHistories: (query: string, opts: SearchOpts): Promise<AllSearchResults> =>
+    callInvoke<AllSearchResults>(IPC_TERMINAL_SEARCH_ALL_HISTORIES, { query, opts }),
   onEvent: (listener: (evt: TerminalEvent) => void): (() => void) => {
     const handler = (_e: IpcRendererEvent, evt: TerminalEvent): void => listener(evt);
     ipcRenderer.on(IPC_TERMINAL_EVENT, handler);

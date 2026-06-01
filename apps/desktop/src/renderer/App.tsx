@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { CommandHistoryPicker } from './components/CommandHistoryPicker';
+import { GlobalSearchDialog } from './components/GlobalSearchDialog';
 import { PasteConfirmDialog } from './components/PasteConfirmDialog';
 import { SplitTree } from './components/SplitTree';
 import { TabBar } from './components/TabBar';
@@ -45,6 +47,8 @@ export function App(): JSX.Element {
         )}
       </div>
       <PasteConfirmDialog />
+      <GlobalSearchDialog />
+      <CommandHistoryPicker />
     </div>
   );
 }

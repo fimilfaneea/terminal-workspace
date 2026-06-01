@@ -88,3 +88,42 @@ export interface DefaultCwds {
   documents: string | null;
   downloads: string | null;
 }
+
+export interface SearchOpts {
+  caseSensitive: boolean;
+  regex: boolean;
+}
+
+export interface SearchMatch {
+  lineIdx: number;
+  lineText: string;
+  hitCol: number;
+  hitLength: number;
+}
+
+export interface SearchResults {
+  matches: SearchMatch[];
+  truncated: boolean;
+  error?: 'bad-regex';
+}
+
+export interface SearchHistoryPayload {
+  sessionId: string;
+  query: string;
+  opts: SearchOpts;
+}
+
+export interface SearchAllHistoriesPayload {
+  query: string;
+  opts: SearchOpts;
+}
+
+export interface SessionSearchResults {
+  sessionId: string;
+  title: string;
+  results: SearchResults;
+}
+
+export interface AllSearchResults {
+  perSession: SessionSearchResults[];
+}

@@ -7,10 +7,13 @@ import {
   IPC_TERMINAL_RENAME,
   IPC_TERMINAL_RESIZE,
   IPC_TERMINAL_RESTART,
+  IPC_TERMINAL_SEARCH_ALL_HISTORIES,
+  IPC_TERMINAL_SEARCH_HISTORY,
   IPC_TERMINAL_SNAPSHOT,
   IPC_TERMINAL_WRITE,
 } from '@shared/constants';
 import type {
+  AllSearchResults,
   ClearScrollbackPayload,
   CloseSessionPayload,
   CreateSessionOpts,
@@ -18,6 +21,9 @@ import type {
   RenamePayload,
   ResizePayload,
   RestartSessionPayload,
+  SearchAllHistoriesPayload,
+  SearchHistoryPayload,
+  SearchResults,
   SessionInfo,
   Snapshot,
   SnapshotPayload,
@@ -89,6 +95,18 @@ export function registerTerminalIpc(manager: TerminalManager): () => void {
     wrap<void>(IPC_TERMINAL_CLEAR_SCROLLBACK, () => manager.clearScrollback(payload.sessionId)),
   );
 
+  ipcMain.handle(IPC_TERMINAL_SEARCH_HISTORY, (_e, payload: SearchHistoryPayload) =>
+    wrap<SearchResults>(IPC_TERMINAL_SEARCH_HISTORY, () =>
+      manager.searchHistory(payload.sessionId, payload.query, payload.opts),
+    ),
+  );
+
+  ipcMain.handle(IPC_TERMINAL_SEARCH_ALL_HISTORIES, (_e, payload: SearchAllHistoriesPayload) =>
+    wrap<AllSearchResults>(IPC_TERMINAL_SEARCH_ALL_HISTORIES, () =>
+      manager.searchAllHistories(payload.query, payload.opts),
+    ),
+  );
+
   const onWrite = (_e: Electron.IpcMainEvent, payload: WritePayload): void => {
     if (isShuttingDown()) return;
     try {
@@ -117,6 +135,8 @@ export function registerTerminalIpc(manager: TerminalManager): () => void {
     ipcMain.removeHandler(IPC_TERMINAL_LIST);
     ipcMain.removeHandler(IPC_TERMINAL_SNAPSHOT);
     ipcMain.removeHandler(IPC_TERMINAL_CLEAR_SCROLLBACK);
+    ipcMain.removeHandler(IPC_TERMINAL_SEARCH_HISTORY);
+    ipcMain.removeHandler(IPC_TERMINAL_SEARCH_ALL_HISTORIES);
     ipcMain.removeListener(IPC_TERMINAL_WRITE, onWrite);
     ipcMain.removeListener(IPC_TERMINAL_RESIZE, onResize);
   };

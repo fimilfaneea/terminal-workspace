@@ -1,4 +1,11 @@
-import type { SessionInfo, SessionStatus, Snapshot, TerminalEvent } from '@shared/types';
+import type {
+  SearchOpts,
+  SearchResults,
+  SessionInfo,
+  SessionStatus,
+  Snapshot,
+  TerminalEvent,
+} from '@shared/types';
 import { FLUSH_INTERVAL_MS, FLUSH_MAX_BYTES, TERMINAL_SHUTDOWN_TIMEOUT_MS } from '../constants';
 import { log } from '../logger';
 import { filterEnv } from './env';
@@ -211,6 +218,14 @@ export class TerminalSession {
     this.history.clear();
     this.updatedAt = Date.now();
     this.emit({ kind: 'cleared', sessionId: this.id });
+  }
+
+  searchHistory(query: string, opts: SearchOpts): SearchResults {
+    return this.history.searchPlain(query, opts);
+  }
+
+  getTitle(): string {
+    return this.title;
   }
 
   snapshot(): Snapshot {

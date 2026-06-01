@@ -1,5 +1,14 @@
 import { existsSync, statSync } from 'node:fs';
-import type { CreateSessionOpts, SessionInfo, Snapshot, TerminalEvent } from '@shared/types';
+import type {
+  AllSearchResults,
+  CreateSessionOpts,
+  SearchOpts,
+  SearchResults,
+  SessionInfo,
+  SessionSearchResults,
+  Snapshot,
+  TerminalEvent,
+} from '@shared/types';
 import { TERMINAL_SHUTDOWN_TIMEOUT_MS } from '../constants';
 import { log } from '../logger';
 import { Emitter } from './events';
@@ -112,6 +121,19 @@ export class TerminalManager {
 
   snapshot(sessionId: string): Snapshot {
     return this.require(sessionId).snapshot();
+  }
+
+  searchHistory(sessionId: string, query: string, opts: SearchOpts): SearchResults {
+    return this.require(sessionId).searchHistory(query, opts);
+  }
+
+  searchAllHistories(query: string, opts: SearchOpts): AllSearchResults {
+    const perSession: SessionSearchResults[] = [];
+    for (const [id, s] of this.sessions) {
+      const results = s.searchHistory(query, opts);
+      perSession.push({ sessionId: id, title: s.getTitle(), results });
+    }
+    return { perSession };
   }
 
   async restart(sessionId: string): Promise<SessionInfo> {

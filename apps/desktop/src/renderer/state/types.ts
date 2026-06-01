@@ -45,6 +45,9 @@ export interface WorkspaceState {
   bootstrapping: boolean;
   pasteConfirmRequest: PasteConfirmRequest | null;
   lastCwd: string | null;
+  // Per-session ring of newline-terminated input lines the user typed.
+  // In-memory only — resets on app restart by design.
+  commandHistoryBySession: Record<string, string[]>;
 }
 
 export interface CloseResult {
@@ -66,6 +69,7 @@ export interface WorkspaceActions {
   focusNextPane: () => void;
   focusPrevPane: () => void;
   setSplitRatios: (tabId: string, splitNodeId: string, ratios: number[]) => void;
+  activateSession: (sessionId: string) => { tabId: string; paneId: string } | null;
 
   renameSession: (sessionId: string, title: string) => Promise<void>;
   restartSession: (sessionId: string) => Promise<void>;
@@ -81,6 +85,8 @@ export interface WorkspaceActions {
   dismissPasteConfirm: () => void;
 
   setLastCwd: (path: string | null) => void;
+
+  appendCommandHistory: (sessionId: string, line: string) => void;
 }
 
 export type WorkspaceStore = WorkspaceState & WorkspaceActions;

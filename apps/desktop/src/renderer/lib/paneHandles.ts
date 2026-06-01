@@ -8,6 +8,7 @@ export interface PaneHandle {
   closeFindBar: () => void;
   startRename: () => void;
   focus: () => void;
+  jumpToMatch: (snippet: string) => void;
 }
 
 const handles = new Map<string, PaneHandle>();

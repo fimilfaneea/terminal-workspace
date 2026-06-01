@@ -131,6 +131,8 @@ function resolveDefaultCwd(state: WorkspaceState): string | undefined {
   return preset ?? undefined;
 }
 
+const COMMAND_HISTORY_CAP_PER_SESSION = 500;
+
 const initialState: WorkspaceState = {
   tabs: [],
   activeTabId: '',
@@ -139,6 +141,7 @@ const initialState: WorkspaceState = {
   bootstrapping: false,
   pasteConfirmRequest: null,
   lastCwd: readPersistedLastCwd(),
+  commandHistoryBySession: {},
 };
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -238,6 +241,24 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         t.id === tabId ? { ...t, hasUnreadActivity: false } : t,
       ),
     }));
+  },
+
+  activateSession: (sessionId: string) => {
+    const s = get();
+    const tabIdx = findTabIndexContainingSession(s.tabs, sessionId);
+    if (tabIdx === -1) return null;
+    const tab = s.tabs[tabIdx]!;
+    const paneId = findPaneIdInNode(tab.rootPane, sessionId);
+    if (!paneId) return null;
+    set((prev) => ({
+      activeTabId: tab.id,
+      tabs: prev.tabs.map((t) =>
+        t.id === tab.id
+          ? { ...t, activePaneId: paneId, hasUnreadActivity: false }
+          : t,
+      ),
+    }));
+    return { tabId: tab.id, paneId };
   },
 
   reorderTabs: (fromIndex: number, toIndex: number) => {
@@ -441,6 +462,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   setLastCwd: (path: string | null) => {
     set({ lastCwd: path && path.length > 0 ? path : null });
+  },
+
+  appendCommandHistory: (sessionId: string, line: string) => {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return;
+    set((s) => {
+      const prev = s.commandHistoryBySession[sessionId] ?? [];
+      // Dedupe consecutive duplicates — the same command repeated twice in a
+      // row collapses to one entry.
+      if (prev[prev.length - 1] === trimmed) return s;
+      const next = prev.length >= COMMAND_HISTORY_CAP_PER_SESSION
+        ? [...prev.slice(prev.length - COMMAND_HISTORY_CAP_PER_SESSION + 1), trimmed]
+        : [...prev, trimmed];
+      return {
+        commandHistoryBySession: { ...s.commandHistoryBySession, [sessionId]: next },
+      };
+    });
   },
 }));
 
