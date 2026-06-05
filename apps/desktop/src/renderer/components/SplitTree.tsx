@@ -6,6 +6,7 @@ import {
   useGroupRef,
   type Layout,
 } from 'react-resizable-panels';
+import { PaneErrorBoundary } from './PaneErrorBoundary';
 import { TerminalPane } from './TerminalPane';
 import { useWorkspaceStore } from '@renderer/state/workspaceStore';
 import type { PaneNode, SplitPaneNode, Tab } from '@renderer/state/types';
@@ -38,12 +39,14 @@ function renderNode(
           useWorkspaceStore.getState().setActivePane(tabId, node.id);
         }}
       >
-        <TerminalPane
-          sessionId={node.sessionId}
-          paneId={node.id}
-          isFocused={node.id === activePaneId}
-          isVisible={isVisible}
-        />
+        <PaneErrorBoundary paneId={node.id}>
+          <TerminalPane
+            sessionId={node.sessionId}
+            paneId={node.id}
+            isFocused={node.id === activePaneId}
+            isVisible={isVisible}
+          />
+        </PaneErrorBoundary>
       </div>
     );
   }
@@ -74,7 +77,14 @@ function SplitGroup({
   const groupRef = useGroupRef();
   const programmaticRef = useRef(false);
   const n = node.children.length;
-  const panelId = (i: number): string => `${node.id}:${i}`;
+  // Panel ids and React keys are tied to each child's stable pane id, not to
+  // its position in `node.children`. `splitLeaf` and `removeLeaf` may insert
+  // or remove a sibling mid-array; positional keys would cause React to swap
+  // children between sibling <Panel>s, tearing down and recreating every
+  // shifted pane's TerminalPane (and its xterm canvases) on every split or
+  // close. Child-id keys keep each Panel's identity tied to the pane it
+  // actually renders, so mid-array edits become clean inserts/removes.
+  const panelId = (childId: string): string => `${node.id}:${childId}`;
 
   // When `userResized` is false, force every panel back to 1/n after each
   // child-count change. The library only honors `defaultSize` on a panel's
@@ -87,14 +97,14 @@ function SplitGroup({
     if (!handle) return;
     const layout: Layout = {};
     const equal = 100 / n;
-    for (let i = 0; i < n; i++) layout[panelId(i)] = equal;
+    for (const c of node.children) layout[panelId(c.id)] = equal;
     programmaticRef.current = true;
     try {
       handle.setLayout(layout);
     } finally {
       programmaticRef.current = false;
     }
-    // panelId uses node.id, captured for the duration of this effect
+    // panelId uses node.id; node.children identities are stable across renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n, node.userResized, node.id]);
 
@@ -106,8 +116,8 @@ function SplitGroup({
       className="split-group"
       onLayoutChanged={(layout: Layout) => {
         if (programmaticRef.current) return;
-        const ratios = node.children.map((_, i) => {
-          const v = layout[panelId(i)];
+        const ratios = node.children.map((c) => {
+          const v = layout[panelId(c.id)];
           return typeof v === 'number' ? v / 100 : 1 / n;
         });
         useWorkspaceStore.getState().setSplitRatios(tabId, node.id, ratios);
@@ -118,9 +128,9 @@ function SplitGroup({
           ? (node.ratios[i] ?? 1 / n) * 100
           : 100 / n;
         return (
-          <Fragment key={panelId(i)}>
+          <Fragment key={child.id}>
             {i > 0 && <Separator className="split-separator" />}
-            <Panel id={panelId(i)} defaultSize={size} minSize={5}>
+            <Panel id={panelId(child.id)} defaultSize={size} minSize={5}>
               {renderNode(child, tabId, isVisible, activePaneId)}
             </Panel>
           </Fragment>

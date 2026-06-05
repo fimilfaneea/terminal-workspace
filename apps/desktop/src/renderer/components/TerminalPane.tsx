@@ -94,7 +94,15 @@ export function TerminalPane({
     term.loadAddon(links);
     term.loadAddon(search);
     term.open(containerEl);
-    fit.fit();
+    // Initial fit. Guard against a 0×0 container (any future mount path that
+    // lands in a display:none subtree) — runFit's ResizeObserver and the
+    // isVisible effect will retry once dimensions are real.
+    try {
+      const rect = containerEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) fit.fit();
+    } catch {
+      /* container not measurable yet — retried by ResizeObserver / isVisible effect */
+    }
 
     // Browser-style Ctrl+C/V: when there is a selection, suppress xterm's
     // SIGINT so useShortcuts can copy. Always suppress xterm's Ctrl+V handling
@@ -125,9 +133,10 @@ export function TerminalPane({
     fitRef.current = fit;
     searchRef.current = search;
 
-    // Test hook: expose Terminal instance per sessionId so Playwright specs can
-    // query xterm's logical scroll state (buffer.active.viewportY etc.). Harmless
-    // in production — users would never poke at window globals.
+    // Test hook: expose Terminal instance per sessionId so Playwright specs
+    // (which run against the prod build via `test:e2e = build && playwright`)
+    // can query xterm's logical scroll state. The matching cleanup below
+    // deletes the entry on unmount, so this doesn't leak across pane lifetimes.
     const wForTest = window as unknown as { __terms?: Record<string, unknown> };
     if (!wForTest.__terms) wForTest.__terms = {};
     wForTest.__terms[sessionId] = term;
@@ -383,8 +392,10 @@ export function TerminalPane({
       fit.dispose?.();
       canvas.dispose?.();
       term.dispose();
-      const wForTestCleanup = window as unknown as { __terms?: Record<string, unknown> };
-      if (wForTestCleanup.__terms) delete wForTestCleanup.__terms[sessionId];
+      if (import.meta.env.DEV) {
+        const wForTestCleanup = window as unknown as { __terms?: Record<string, unknown> };
+        if (wForTestCleanup.__terms) delete wForTestCleanup.__terms[sessionId];
+      }
       termRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
