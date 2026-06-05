@@ -91,6 +91,19 @@ function SplitGroup({
   // first mount, so a fresh equal layout has to be pushed imperatively.
   // `programmaticRef` flags this push so the resulting onLayoutChanged event
   // is not mistaken for a user drag.
+  //
+  // CRITICAL TIMING: react-resizable-panels updates its internal
+  // `derivedPanelConstraints` from a ResizeObserver callback (see
+  // node_modules/react-resizable-panels/dist/react-resizable-panels.js:1394),
+  // which runs asynchronously after the browser paints. When a new <Panel>
+  // is added (split → child-count goes N → N+1), the library's panel list
+  // grows synchronously via registerPanel, but `derivedPanelConstraints` —
+  // which `setLayout` validates against — lags by one frame. Calling
+  // `setLayout` synchronously here with N+1 keys throws "Invalid N panel
+  // layout" → uncaught error in useEffect → React 18 unmounts the entire
+  // tree → blank window. Defer to the next animation frame so the
+  // ResizeObserver has time to catch up. Also catch any error defensively
+  // so the renderer stays alive if the timing assumption ever changes.
   useEffect(() => {
     if (node.userResized) return;
     const handle = groupRef.current;
@@ -98,12 +111,18 @@ function SplitGroup({
     const layout: Layout = {};
     const equal = 100 / n;
     for (const c of node.children) layout[panelId(c.id)] = equal;
-    programmaticRef.current = true;
-    try {
-      handle.setLayout(layout);
-    } finally {
-      programmaticRef.current = false;
-    }
+    const rafId = requestAnimationFrame(() => {
+      programmaticRef.current = true;
+      try {
+        handle.setLayout(layout);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[SplitGroup] setLayout threw — staying with library-distributed sizes', err);
+      } finally {
+        programmaticRef.current = false;
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
     // panelId uses node.id; node.children identities are stable across renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n, node.userResized, node.id]);

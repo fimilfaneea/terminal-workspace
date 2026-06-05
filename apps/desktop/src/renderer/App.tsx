@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { CommandHistoryPicker } from './components/CommandHistoryPicker';
 import { GlobalSearchDialog } from './components/GlobalSearchDialog';
+import { PaneErrorBoundary } from './components/PaneErrorBoundary';
 import { PasteConfirmDialog } from './components/PasteConfirmDialog';
 import { SplitTree } from './components/SplitTree';
 import { TabBar } from './components/TabBar';
@@ -40,7 +41,9 @@ export function App(): JSX.Element {
                 className="app-shell__tab"
                 style={{ display: isVisible ? 'flex' : 'none' }}
               >
-                <SplitTree tab={tab} isVisible={isVisible} />
+                <PaneErrorBoundary paneId={tab.id}>
+                  <SplitTree tab={tab} isVisible={isVisible} />
+                </PaneErrorBoundary>
               </div>
             );
           })
