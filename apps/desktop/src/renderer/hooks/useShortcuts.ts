@@ -220,6 +220,11 @@ export function useShortcuts(): void {
           e.preventDefault();
           if (focusedSessionId) void store.restartSession(focusedSessionId);
           return;
+        case ')':
+        case '0':
+          e.preventDefault();
+          store.equalizePanes(store.activeTabId);
+          return;
         default:
           return;
       }

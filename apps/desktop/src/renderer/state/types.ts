@@ -69,6 +69,7 @@ export interface WorkspaceActions {
   focusNextPane: () => void;
   focusPrevPane: () => void;
   setSplitRatios: (tabId: string, splitNodeId: string, ratios: number[]) => void;
+  equalizePanes: (tabId: string) => void;
   activateSession: (sessionId: string) => { tabId: string; paneId: string } | null;
 
   renameSession: (sessionId: string, title: string) => Promise<void>;

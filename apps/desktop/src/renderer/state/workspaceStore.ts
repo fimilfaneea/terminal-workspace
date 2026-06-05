@@ -12,6 +12,7 @@ import {
   collectLeafIds,
   collectSessionIds,
   createLeaf,
+  equalizeAllSplits,
   findLeaf,
   focusNext,
   focusPrev,
@@ -397,6 +398,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       if (!tab) return s;
       const nextRoot = updateSplitRatios(tab.rootPane, splitNodeId, ratios);
       if (nextRoot === tab.rootPane) return s;
+      return {
+        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, rootPane: nextRoot } : t)),
+      };
+    });
+  },
+
+  equalizePanes: (tabId: string) => {
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.rootPane.type === 'leaf') return s;
+      const nextRoot = equalizeAllSplits(tab.rootPane);
       return {
         tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, rootPane: nextRoot } : t)),
       };

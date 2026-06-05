@@ -33,6 +33,10 @@ export function TabBar(): JSX.Element {
   const newTab = useWorkspaceStore((s) => s.newTab);
   const renameTab = useWorkspaceStore((s) => s.renameTab);
   const splitFocusedPane = useWorkspaceStore((s) => s.splitFocusedPane);
+  const equalizePanes = useWorkspaceStore((s) => s.equalizePanes);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const canEqualize =
+    activeTab !== undefined && activeTab.rootPane.type !== 'leaf';
 
   const dragFromRef = useRef<number | null>(null);
   const [dropState, setDropState] = useState<DropState | null>(null);
@@ -318,6 +322,16 @@ export function TabBar(): JSX.Element {
             {basenameOf(effectiveCwd)}
           </span>
         )}
+        <button
+          type="button"
+          className={`tab-bar__equalize${canEqualize ? ' tab-bar__equalize--active' : ''}`}
+          title="Equalize pane sizes (Ctrl+Shift+0)"
+          aria-label="Equalize pane sizes"
+          disabled={!canEqualize}
+          onClick={() => activeTab && equalizePanes(activeTab.id)}
+        >
+          <span className="tab-bar__equalize-icon" aria-hidden="true">⫴</span>
+        </button>
         <SavedCommandsButton />
         <FontSizeWidget />
       </div>

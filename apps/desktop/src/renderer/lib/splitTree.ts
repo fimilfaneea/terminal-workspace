@@ -232,6 +232,21 @@ export function focusPrev(root: PaneNode, currentPaneId: string): string {
   return leaves[(idx - 1 + leaves.length) % leaves.length] ?? currentPaneId;
 }
 
+// Reset every split node in the tree to equal ratios and clear `userResized`.
+// SplitTree.tsx's effect at line 84 imperatively pushes `setLayout(equal)` to
+// react-resizable-panels whenever `userResized` flips to false, so clearing
+// the flag is what actually moves the panels.
+export function equalizeAllSplits(root: PaneNode): PaneNode {
+  if (root.type === 'leaf') return root;
+  const n = root.children.length;
+  return {
+    ...root,
+    children: root.children.map((c) => equalizeAllSplits(c)),
+    ratios: equalRatios(n),
+    userResized: false,
+  };
+}
+
 export function updateSplitRatios(
   root: PaneNode,
   splitNodeId: string,
