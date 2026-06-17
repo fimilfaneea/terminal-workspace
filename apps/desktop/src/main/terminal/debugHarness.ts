@@ -5,7 +5,7 @@ import { TerminalManager } from './TerminalManager';
 export async function runDebugHarness(): Promise<void> {
   const mgr = new TerminalManager();
   try {
-    const info = mgr.create({ cols: 80, rows: 24 });
+    const info = mgr.create({ cols: 80, rows: 24 }, 0);
     log.info('debug:session created', info);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 1000));
@@ -21,7 +21,7 @@ export async function runDebugHarness(): Promise<void> {
 export async function runHistoryCapHarness(): Promise<void> {
   const mgr = new TerminalManager();
   try {
-    const info = mgr.create({ cols: 80, rows: 24 });
+    const info = mgr.create({ cols: 80, rows: 24 }, 0);
     const session = mgr.get(info.id);
     if (!session) {
       log.error('debug:history session missing');
@@ -73,7 +73,7 @@ export async function runPhase4Harness(): Promise<void> {
 
   try {
     // Step 1–3: create, write, verify monotonic seq
-    const info = mgr.create({ cols: 80, rows: 24 });
+    const info = mgr.create({ cols: 80, rows: 24 }, 0);
     log.info('phase4:created', info);
     mgr.write(info.id, 'dir\r\n');
     await sleep(400);
@@ -166,8 +166,8 @@ export async function runPhase4Harness(): Promise<void> {
     });
 
     // Step 7: closeAll force-kill timing
-    const a = mgr.create({ cols: 80, rows: 24 });
-    const b = mgr.create({ cols: 80, rows: 24 });
+    const a = mgr.create({ cols: 80, rows: 24 }, 0);
+    const b = mgr.create({ cols: 80, rows: 24 }, 0);
     // `type CON` reads from the console indefinitely → child won't exit on Ctrl-Break.
     mgr.write(b.id, 'type CON\r\n');
     await sleep(200);

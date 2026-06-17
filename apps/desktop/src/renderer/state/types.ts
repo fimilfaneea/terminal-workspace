@@ -1,20 +1,20 @@
-import type { SessionInfo, TerminalEvent } from '@shared/types';
+import type {
+  PaneNode,
+  SerializedTab,
+  SessionInfo,
+  SplitDirection,
+  TerminalEvent,
+} from '@shared/types';
 
-export type SplitDirection = 'horizontal' | 'vertical';
-
-export type PaneNode =
-  | { type: 'leaf'; id: string; sessionId: string }
-  | {
-      type: 'split';
-      id: string;
-      direction: SplitDirection;
-      children: PaneNode[];
-      ratios: number[];
-      userResized: boolean;
-    };
-
-export type SplitPaneNode = Extract<PaneNode, { type: 'split' }>;
-export type LeafPaneNode = Extract<PaneNode, { type: 'leaf' }>;
+// The pane-tree types now live in @shared/types (the detach/adopt payload
+// crosses the IPC boundary). Re-exported here so renderer modules can keep
+// importing them from '@renderer/state/types'.
+export type {
+  LeafPaneNode,
+  PaneNode,
+  SplitDirection,
+  SplitPaneNode,
+} from '@shared/types';
 
 export interface SessionView {
   info: SessionInfo;
@@ -62,6 +62,15 @@ export interface WorkspaceActions {
   setActiveTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   renameTab: (tabId: string, name: string) => void;
+
+  // Multi-window: detach a tab into its own window (PTYs untouched).
+  buildSerializedTab: (tabId: string) => SerializedTab | null;
+  removeTabLocally: (tabId: string) => void;
+  adoptTab: (tab: SerializedTab) => void;
+
+  // Multi-window: detach a single pane into its own window (PTY untouched).
+  buildSerializedPane: (paneId: string) => SerializedTab | null;
+  removePaneLocally: (paneId: string) => void;
 
   splitFocusedPane: (direction: SplitDirection, cwd?: string) => Promise<void>;
   closePane: (paneId: string) => Promise<CloseResult>;

@@ -23,6 +23,16 @@ export function App(): JSX.Element {
   const activeTabId = useWorkspaceStore((s) => s.activeTabId);
 
   useEffect(() => {
+    // Adopt windows (spawned by "Move tab to new window") skip the default
+    // bootstrap and pull their detached tab from main instead.
+    if (window.location.hash === '#adopt') {
+      void (async () => {
+        const tab = await window.shell.claimAdoptedTab();
+        if (tab) useWorkspaceStore.getState().adoptTab(tab);
+        else void initWorkspace();
+      })();
+      return;
+    }
     void initWorkspace();
   }, [initWorkspace]);
 

@@ -81,6 +81,19 @@ export function TabBar(): JSX.Element {
     })();
   };
 
+  const openNewWindow = (): void => {
+    void window.shell.openWindow();
+  };
+
+  const moveTabToNewWindow = (tabId: string): void => {
+    void (async () => {
+      const payload = useWorkspaceStore.getState().buildSerializedTab(tabId);
+      if (!payload) return; // only one tab — nothing to detach
+      await window.shell.openWindowWithTab(payload);
+      useWorkspaceStore.getState().removeTabLocally(tabId);
+    })();
+  };
+
   const handleDragOver = (e: React.DragEvent, index: number): void => {
     if (dragFromRef.current === null) return;
     e.preventDefault();
@@ -140,6 +153,13 @@ export function TabBar(): JSX.Element {
       label: 'Manage presets…',
       onActivate: () => setShowManageDialog(true),
     },
+    { kind: 'separator' },
+    {
+      kind: 'item',
+      label: 'New window',
+      shortcut: 'Ctrl+Shift+N',
+      onActivate: openNewWindow,
+    },
   ];
 
   const splitAt = (
@@ -193,6 +213,19 @@ export function TabBar(): JSX.Element {
             tabRenameHandles.current.get(tab.id)?.startEditing();
           });
         },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: 'New window',
+        shortcut: 'Ctrl+Shift+N',
+        onActivate: openNewWindow,
+      },
+      {
+        kind: 'item',
+        label: 'Move tab to new window',
+        disabled: tabs.length <= 1,
+        onActivate: () => moveTabToNewWindow(tab.id),
       },
       { kind: 'separator' },
       {

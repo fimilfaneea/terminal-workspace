@@ -32,3 +32,7 @@ export const IPC_CLIPBOARD_READ_TEXT = 'clipboard:readText';
 export const IPC_CLIPBOARD_WRITE_TEXT = 'clipboard:writeText';
 
 export const IPC_WINDOW_REQUEST_CLOSE = 'window:requestClose';
+export const IPC_WINDOW_OPEN = 'window:open';
+export const IPC_WINDOW_OPEN_WITH_TAB = 'window:openWithTab';
+// Pulled by an adopt window once its renderer is ready (race-free vs a push).
+export const IPC_WINDOW_CLAIM_ADOPTED_TAB = 'window:claimAdoptedTab';

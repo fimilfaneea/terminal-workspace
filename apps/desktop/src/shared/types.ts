@@ -127,3 +127,38 @@ export interface SessionSearchResults {
 export interface AllSearchResults {
   perSession: SessionSearchResults[];
 }
+
+// --- pane tree / multi-window ---------------------------------------------
+// These live in shared (not renderer-only) because the detach/adopt payload
+// crosses the IPC boundary, so main and preload need the structural types too.
+
+export type SplitDirection = 'horizontal' | 'vertical';
+
+export type PaneNode =
+  | { type: 'leaf'; id: string; sessionId: string }
+  | {
+      type: 'split';
+      id: string;
+      direction: SplitDirection;
+      children: PaneNode[];
+      ratios: number[];
+      userResized: boolean;
+    };
+
+export type SplitPaneNode = Extract<PaneNode, { type: 'split' }>;
+export type LeafPaneNode = Extract<PaneNode, { type: 'leaf' }>;
+
+// Payload moved between windows when a tab is detached into a new window.
+// The PTYs are untouched — this is a pure UI/display hand-off, so the tab's
+// per-session command-recall history travels with it.
+export interface SerializedTab {
+  rootPane: PaneNode;
+  activePaneId: string;
+  nameOverride: string | null;
+  sessions: SessionInfo[];
+  commandHistory: Record<string, string[]>;
+}
+
+export interface OpenWithTabPayload {
+  tab: SerializedTab;
+}

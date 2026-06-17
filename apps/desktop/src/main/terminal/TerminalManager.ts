@@ -49,6 +49,10 @@ export class InvalidTitleError extends Error {
 
 export class TerminalManager {
   private readonly sessions = new Map<string, TerminalSession>();
+  // sessionId -> owning window's webContents.id. Drives per-window event
+  // routing, per-window close, and per-window dev-reload. Reassigned (not
+  // recreated) when a tab is detached into another window.
+  private readonly ownerBySession = new Map<string, number>();
   private titleCounter = 0;
   private readonly events = new Emitter<TerminalEvent>();
   private readonly emit = (event: TerminalEvent): void => this.events.emit(event);
@@ -57,7 +61,7 @@ export class TerminalManager {
     return this.events.on(listener);
   }
 
-  create(opts: CreateSessionOpts): SessionInfo {
+  create(opts: CreateSessionOpts, ownerId: number): SessionInfo {
     const cwd = resolveCwd(opts.cwd);
     const title = opts.title ?? `Terminal ${++this.titleCounter}`;
     const id = newSessionId();
@@ -70,14 +74,85 @@ export class TerminalManager {
       emit: this.emit,
     });
     this.sessions.set(id, session);
+    // Record ownership before start() so the 'started' event already routes.
+    this.ownerBySession.set(id, ownerId);
     try {
       session.start();
     } catch (err) {
       log.error('terminal:create start failed', { id, err });
       this.sessions.delete(id);
+      this.ownerBySession.delete(id);
       throw err;
     }
     return session.getInfo();
+  }
+
+  ownerOf(sessionId: string): number | undefined {
+    return this.ownerBySession.get(sessionId);
+  }
+
+  // Detach: move live sessions from one window to another. The PTYs keep
+  // running; only the event-routing target changes.
+  reassignOwner(sessionIds: string[], newOwnerId: number): void {
+    for (const id of sessionIds) {
+      if (this.sessions.has(id)) this.ownerBySession.set(id, newOwnerId);
+    }
+  }
+
+  runningCountForWindow(ownerId: number): number {
+    let n = 0;
+    for (const [id, s] of this.sessions) {
+      if (this.ownerBySession.get(id) === ownerId && s.getStatus() === 'running') n++;
+    }
+    return n;
+  }
+
+  async closeForWindow(
+    ownerId: number,
+    timeoutMs: number = TERMINAL_SHUTDOWN_TIMEOUT_MS,
+  ): Promise<void> {
+    const owned: Array<[string, TerminalSession]> = [];
+    for (const [id, s] of this.sessions) {
+      if (this.ownerBySession.get(id) === ownerId) owned.push([id, s]);
+    }
+    if (owned.length === 0) return;
+
+    const closes = owned.map(([, s]) =>
+      s.close().catch((err) => log.warn('closeForWindow: graceful close failed', err)),
+    );
+
+    let timedOut = false;
+    await Promise.race([
+      Promise.allSettled(closes),
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          timedOut = true;
+          resolve();
+        }, timeoutMs),
+      ),
+    ]);
+
+    if (timedOut) {
+      for (const [, s] of owned) {
+        const status = s.getStatus();
+        if (status === 'running' || status === 'starting') {
+          try {
+            s.forceKill();
+          } catch (err) {
+            log.warn('closeForWindow: forceKill threw', err);
+          }
+        }
+      }
+      await Promise.race([
+        Promise.allSettled(closes),
+        new Promise<void>((resolve) => setTimeout(resolve, 250)),
+      ]);
+    }
+
+    for (const [id] of owned) {
+      this.sessions.delete(id);
+      this.ownerBySession.delete(id);
+    }
   }
 
   get(id: string): TerminalSession | undefined {
@@ -146,6 +221,10 @@ export class TerminalManager {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     await session.close();
+    // Session object lingers in the map (its history stays searchable in
+    // full-history Find until window/app teardown), but it no longer needs
+    // event routing — drop its ownership entry.
+    this.ownerBySession.delete(sessionId);
   }
 
   async closeAll(timeoutMs: number = TERMINAL_SHUTDOWN_TIMEOUT_MS): Promise<void> {
@@ -189,5 +268,6 @@ export class TerminalManager {
     }
 
     this.sessions.clear();
+    this.ownerBySession.clear();
   }
 }

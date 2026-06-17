@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { IPC_TERMINAL_EVENT } from '@shared/constants';
+import type { OpenWithTabPayload, SerializedTab } from '@shared/types';
 import { showCloseConfirm } from './dialogs';
 import { setShuttingDown } from './lifecycle';
 import { createMainWindow } from './window';
@@ -28,7 +29,12 @@ if (!gotLock) {
   let unregisterClipboardIpc: (() => void) | null = null;
   let unregisterWindowIpc: (() => void) | null = null;
 
-  let confirmedQuit = false;
+  // Windows whose close has been confirmed — guards win.on('close') against a
+  // re-prompt when confirmAndCloseWindow destroys them.
+  const closing = new WeakSet<BrowserWindow>();
+  // Tabs waiting to be claimed by a freshly-spawned adopt window, keyed by the
+  // new window's webContents.id. Pull model avoids a push/listener race.
+  const pendingAdopt = new Map<number, SerializedTab>();
   let quitInProgress: Promise<void> | null = null;
 
   function proceedToQuit(): Promise<void> {
@@ -52,53 +58,59 @@ if (!gotLock) {
     return quitInProgress;
   }
 
-  async function confirmAndQuit(win: BrowserWindow): Promise<void> {
-    if (confirmedQuit) return;
+  // Closing a window closes only the PTYs it owns and destroys that window.
+  // The app quits naturally when the last window closes (window-all-closed →
+  // app.quit → before-quit → proceedToQuit for global teardown).
+  async function confirmAndCloseWindow(win: BrowserWindow): Promise<void> {
+    if (closing.has(win) || win.isDestroyed()) return;
+    const winId = win.webContents.id;
     if (TEST_MODE) {
-      confirmedQuit = true;
-      await proceedToQuit();
+      closing.add(win);
+      if (terminalManager) await terminalManager.closeForWindow(winId);
       if (!win.isDestroyed()) win.destroy();
       return;
     }
-    const count = terminalManager?.runningCount() ?? 0;
+    const count = terminalManager?.runningCountForWindow(winId) ?? 0;
     const ok = await showCloseConfirm(win, count);
     if (!ok) return;
-    confirmedQuit = true;
-    await proceedToQuit();
+    closing.add(win);
+    if (terminalManager) await terminalManager.closeForWindow(winId);
     if (!win.isDestroyed()) win.destroy();
   }
 
   function attachWindow(win: BrowserWindow): void {
     let unsubscribeEvents: (() => void) | null = null;
     let firstLoad = true;
+    const winId = win.webContents.id;
 
     win.webContents.once('did-finish-load', () => {
       if (!terminalManager || win.isDestroyed()) return;
       unsubscribeEvents = terminalManager.onEvent((evt) => {
-        if (!win.isDestroyed()) {
-          win.webContents.send(IPC_TERMINAL_EVENT, evt);
-        }
+        if (win.isDestroyed()) return;
+        // Route only events for sessions this window owns.
+        if (terminalManager?.ownerOf(evt.sessionId) !== winId) return;
+        win.webContents.send(IPC_TERMINAL_EVENT, evt);
       });
     });
 
     // Renderer reloads (HMR full-page or manual refresh) would otherwise leave
-    // PTYs orphaned in main while renderer state resets. Close all sessions
-    // synchronously before the new renderer mounts.
+    // this window's PTYs orphaned in main while its renderer state resets.
+    // Close only this window's sessions before the new renderer mounts.
     win.webContents.on('did-start-loading', () => {
       if (firstLoad) {
         firstLoad = false;
         return;
       }
       if (!terminalManager || quitInProgress) return;
-      void terminalManager.closeAll(500).catch((err) => {
-        log.warn('dev-reload: closeAll failed', err);
+      void terminalManager.closeForWindow(winId, 500).catch((err) => {
+        log.warn('dev-reload: closeForWindow failed', err);
       });
     });
 
     win.on('close', (e) => {
-      if (confirmedQuit) return;
+      if (closing.has(win)) return;
       e.preventDefault();
-      void confirmAndQuit(win);
+      void confirmAndCloseWindow(win);
     });
 
     win.on('closed', () => {
@@ -110,10 +122,41 @@ if (!gotLock) {
     });
   }
 
+  function openWindow(): void {
+    const win = createMainWindow({ primary: false });
+    attachWindow(win);
+  }
+
+  function openWindowWithTab(payload: OpenWithTabPayload, _senderId: number): void {
+    if (!terminalManager) return;
+    const win = createMainWindow({ primary: false, adopt: true });
+    const winId = win.webContents.id;
+    // Reassign ownership synchronously (before load) so the source window stops
+    // receiving these sessions immediately; the new panes snapshot full history.
+    terminalManager.reassignOwner(
+      payload.tab.sessions.map((s) => s.id),
+      winId,
+    );
+    // Stash for the new renderer to pull once it's ready (see claimAdoptedTab).
+    pendingAdopt.set(winId, payload.tab);
+    win.on('closed', () => pendingAdopt.delete(winId));
+    attachWindow(win);
+  }
+
+  function claimAdoptedTab(senderId: number): SerializedTab | null {
+    const tab = pendingAdopt.get(senderId) ?? null;
+    pendingAdopt.delete(senderId);
+    return tab;
+  }
+
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    const win =
+      BrowserWindow.getFocusedWindow() ??
+      BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ??
+      null;
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
     }
   });
 
@@ -123,8 +166,10 @@ if (!gotLock) {
     unregisterShellIpc = registerShellIpc();
     unregisterClipboardIpc = registerClipboardIpc();
     unregisterWindowIpc = registerWindowIpc({
-      getMainWindow: () => mainWindow,
-      confirmAndQuit,
+      openWindow,
+      openWindowWithTab,
+      claimAdoptedTab,
+      confirmAndCloseWindow,
     });
 
     mainWindow = createMainWindow();

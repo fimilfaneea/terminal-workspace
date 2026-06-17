@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useWorkspaceStore } from '@renderer/state/workspaceStore';
+import {
+  selectTotalPaneCount,
+  useWorkspaceStore,
+} from '@renderer/state/workspaceStore';
 import { getPaneHandle } from '@renderer/lib/paneHandles';
 import {
   copySelectionFromPane,
@@ -42,6 +45,7 @@ export function ContextMenu({
   const splitFocusedPane = useWorkspaceStore((s) => s.splitFocusedPane);
   const bumpFontSize = useWorkspaceStore((s) => s.bumpFontSize);
   const resetFontSize = useWorkspaceStore((s) => s.resetFontSize);
+  const totalPanes = useWorkspaceStore(selectTotalPaneCount);
   const requestWindowClose = (): Promise<void> => window.shell.requestWindowClose();
 
   const items: Item[] = useMemo(
@@ -141,6 +145,29 @@ export function ContextMenu({
       { kind: 'separator' },
       {
         kind: 'item',
+        label: 'Move pane to new window',
+        shortcut: 'Ctrl+Shift+M',
+        disabled: totalPanes <= 1,
+        onActivate: () => {
+          void (async () => {
+            const payload = useWorkspaceStore.getState().buildSerializedPane(paneId);
+            if (!payload) return;
+            await window.shell.openWindowWithTab(payload);
+            useWorkspaceStore.getState().removePaneLocally(paneId);
+          })();
+        },
+      },
+      {
+        kind: 'item',
+        label: 'New window',
+        shortcut: 'Ctrl+Shift+N',
+        onActivate: () => {
+          void window.shell.openWindow();
+        },
+      },
+      { kind: 'separator' },
+      {
+        kind: 'item',
         label: 'Close pane',
         shortcut: 'Ctrl+Shift+X',
         onActivate: () => {
@@ -151,7 +178,7 @@ export function ContextMenu({
         },
       },
     ],
-    [paneId, sessionId, hasSelection, clearScrollback, restartSession, closePane, splitFocusedPane, bumpFontSize, resetFontSize],
+    [paneId, sessionId, hasSelection, totalPanes, clearScrollback, restartSession, closePane, splitFocusedPane, bumpFontSize, resetFontSize],
   );
 
   const firstEnabledIndex = items.findIndex(

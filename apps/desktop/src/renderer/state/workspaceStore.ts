@@ -6,7 +6,7 @@ import {
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
 } from '@shared/constants';
-import type { SessionInfo, TerminalEvent } from '@shared/types';
+import type { SerializedTab, SessionInfo, TerminalEvent } from '@shared/types';
 import { newTabId } from '@renderer/lib/ids';
 import {
   collectLeafIds,
@@ -278,6 +278,156 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       if (!moved) return s;
       next.splice(toIndex, 0, moved);
       return { tabs: next };
+    });
+  },
+
+  // --- multi-window (detach / adopt) -------------------------------------
+
+  // Snapshot a tab for hand-off to a new window. Returns null when this is the
+  // only tab (nothing to detach into a separate window). The PTYs are not
+  // touched — this is purely the renderer's view of the tab.
+  buildSerializedTab: (tabId: string): SerializedTab | null => {
+    const s = get();
+    if (s.tabs.length <= 1) return null;
+    const tab = s.tabs.find((t) => t.id === tabId);
+    if (!tab) return null;
+    const sessionIds = collectSessionIds(tab.rootPane);
+    const sessions: SessionInfo[] = [];
+    const commandHistory: Record<string, string[]> = {};
+    for (const sid of sessionIds) {
+      const view = s.sessionsById[sid];
+      if (view) sessions.push(view.info);
+      const hist = s.commandHistoryBySession[sid];
+      if (hist) commandHistory[sid] = hist;
+    }
+    return {
+      rootPane: tab.rootPane,
+      activePaneId: tab.activePaneId,
+      nameOverride: tab.nameOverride,
+      sessions,
+      commandHistory,
+    };
+  },
+
+  // Drop a tab from THIS window without closing its sessions — they live on in
+  // the window that adopted them. Mirrors closeTab minus the terminal.close.
+  removeTabLocally: (tabId: string) => {
+    const s = get();
+    const tab = s.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    const sessionIds = collectSessionIds(tab.rootPane);
+    const remaining = s.tabs.filter((t) => t.id !== tabId);
+    const nextActiveTabId =
+      s.activeTabId === tabId ? (remaining[0]?.id ?? '') : s.activeTabId;
+    const sessionsById = { ...s.sessionsById };
+    const commandHistoryBySession = { ...s.commandHistoryBySession };
+    for (const sid of sessionIds) {
+      delete sessionsById[sid];
+      delete commandHistoryBySession[sid];
+    }
+    set({
+      tabs: remaining,
+      activeTabId: nextActiveTabId,
+      sessionsById,
+      commandHistoryBySession,
+    });
+  },
+
+  // Insert a detached tab into THIS window. Panes mount against the existing
+  // sessionIds → snapshot + subscribe → reattach to the still-running PTYs.
+  adoptTab: (tab: SerializedTab) => {
+    const adopted: Tab = {
+      id: newTabId(),
+      rootPane: tab.rootPane,
+      activePaneId: tab.activePaneId,
+      hasUnreadActivity: false,
+      hasError: false,
+      nameOverride: tab.nameOverride,
+    };
+    set((s) => {
+      const sessionsById = { ...s.sessionsById };
+      for (const info of tab.sessions) sessionsById[info.id] = makeSessionView(info);
+      const commandHistoryBySession = { ...s.commandHistoryBySession };
+      for (const [sid, lines] of Object.entries(tab.commandHistory)) {
+        commandHistoryBySession[sid] = lines;
+      }
+      return {
+        tabs: [...s.tabs, adopted],
+        activeTabId: adopted.id,
+        sessionsById,
+        commandHistoryBySession,
+        bootstrapping: false,
+      };
+    });
+  },
+
+  // Snapshot a single pane as a one-leaf tab for hand-off to a new window.
+  // Returns null when the window has only one pane total (moving it would empty
+  // the window). The PTY is untouched.
+  buildSerializedPane: (paneId: string): SerializedTab | null => {
+    const s = get();
+    if (totalPaneCount(s.tabs) <= 1) return null;
+    for (const tab of s.tabs) {
+      const leaf = findLeaf(tab.rootPane, paneId);
+      if (!leaf) continue;
+      const sid = leaf.sessionId;
+      const view = s.sessionsById[sid];
+      const sessions: SessionInfo[] = view ? [view.info] : [];
+      const commandHistory: Record<string, string[]> = {};
+      const hist = s.commandHistoryBySession[sid];
+      if (hist) commandHistory[sid] = hist;
+      return {
+        rootPane: leaf,
+        activePaneId: leaf.id,
+        nameOverride: null,
+        sessions,
+        commandHistory,
+      };
+    }
+    return null;
+  },
+
+  // Remove a pane from THIS window without closing its session — it lives on in
+  // the window that adopted it. Mirror of closePane minus the terminal.close.
+  removePaneLocally: (paneId: string) => {
+    const state = get();
+    const tabIndex = state.tabs.findIndex(
+      (t) => findLeaf(t.rootPane, paneId) !== null,
+    );
+    if (tabIndex === -1) return;
+    const tab = state.tabs[tabIndex];
+    if (!tab) return;
+    const { newRoot, orphanedSessionIds } = removeLeaf(tab.rootPane, paneId);
+
+    let nextTabs: Tab[];
+    let nextActiveTabId = state.activeTabId;
+    if (newRoot === null) {
+      nextTabs = state.tabs.filter((t) => t.id !== tab.id);
+      if (state.activeTabId === tab.id) {
+        nextActiveTabId = nextTabs[0]?.id ?? '';
+      }
+    } else {
+      const remainingLeaves = collectLeafIds(newRoot);
+      const nextActivePaneId = remainingLeaves.includes(tab.activePaneId)
+        ? tab.activePaneId
+        : (remainingLeaves[0] ?? tab.activePaneId);
+      nextTabs = state.tabs.map((t) =>
+        t.id === tab.id
+          ? { ...t, rootPane: newRoot, activePaneId: nextActivePaneId }
+          : t,
+      );
+    }
+    const sessionsById = { ...state.sessionsById };
+    const commandHistoryBySession = { ...state.commandHistoryBySession };
+    for (const sid of orphanedSessionIds) {
+      delete sessionsById[sid];
+      delete commandHistoryBySession[sid];
+    }
+    set({
+      tabs: nextTabs,
+      activeTabId: nextActiveTabId,
+      sessionsById,
+      commandHistoryBySession,
     });
   },
 
@@ -586,6 +736,10 @@ function applyEvent(s: WorkspaceState, evt: TerminalEvent): Partial<WorkspaceSta
 
 export function selectActiveTab(s: WorkspaceState): Tab | null {
   return s.tabs.find((t) => t.id === s.activeTabId) ?? null;
+}
+
+export function selectTotalPaneCount(s: WorkspaceState): number {
+  return totalPaneCount(s.tabs);
 }
 
 export function selectActivePane(s: WorkspaceState): PaneNode | null {

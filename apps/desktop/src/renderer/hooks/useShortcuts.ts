@@ -160,6 +160,24 @@ export function useShortcuts(): void {
             }
           })();
           return;
+        case 'N':
+        case 'n':
+          e.preventDefault();
+          void window.shell.openWindow();
+          return;
+        case 'M':
+        case 'm': {
+          e.preventDefault();
+          if (!tab) return;
+          const paneId = tab.activePaneId;
+          const payload = store.buildSerializedPane(paneId);
+          if (!payload) return; // sole pane in window — nothing to detach
+          void (async () => {
+            await window.shell.openWindowWithTab(payload);
+            useWorkspaceStore.getState().removePaneLocally(paneId);
+          })();
+          return;
+        }
         case 'E':
         case 'e':
           e.preventDefault();

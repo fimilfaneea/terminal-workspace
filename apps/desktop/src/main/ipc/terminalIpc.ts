@@ -67,8 +67,8 @@ async function wrap<T>(channel: string, fn: () => T | Promise<T>): Promise<IpcRe
 }
 
 export function registerTerminalIpc(manager: TerminalManager): () => void {
-  ipcMain.handle(IPC_TERMINAL_CREATE, (_e, payload: CreateSessionOpts) =>
-    wrap<SessionInfo>(IPC_TERMINAL_CREATE, () => manager.create(payload)),
+  ipcMain.handle(IPC_TERMINAL_CREATE, (e, payload: CreateSessionOpts) =>
+    wrap<SessionInfo>(IPC_TERMINAL_CREATE, () => manager.create(payload, e.sender.id)),
   );
 
   ipcMain.handle(IPC_TERMINAL_CLOSE, (_e, payload: CloseSessionPayload) =>
